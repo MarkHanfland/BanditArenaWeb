@@ -1,0 +1,14 @@
+{
+  "_comment": "Administrator Test User Pool for Alpha staff login. Manifest: BanditArenaCloudInfrastructure/config/cognito/bandit-test-cognito-pools.json. Copy to amplifyconfiguration.json for local dev, or rely on web/.env.",
+  "aws_project_region": "us-east-1",
+  "aws_cognito_region": "us-east-1",
+  "aws_user_pools_id": "us-east-1_I9ppzRYwO",
+  "aws_user_pools_web_client_id": "15fn5bb1fl3nnnsujt79f4s3b9",
+  "oauth": {
+    "domain": "bandit-administrator-test.auth.us-east-1.amazoncognito.com",
+    "scope": ["openid", "profile", "email"],
+    "redirectSignIn": "http://localhost:5173/auth/callback",
+    "redirectSignOut": "http://localhost:5173/",
+    "responseType": "code"
+  }
+}

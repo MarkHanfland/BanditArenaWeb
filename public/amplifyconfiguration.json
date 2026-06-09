@@ -1,0 +1,32 @@
+{
+  "aws_project_region": "us-east-1",
+  "aws_cloud_logic_custom": [
+    {
+      "name": "BanditAPI",
+      "endpoint": "https://it0ra3hy4l.execute-api.us-east-1.amazonaws.com/dev",
+      "region": "us-east-1"
+    }
+  ],
+  "aws_appsync_graphqlEndpoint": "https://injw2tedyvgepjf6a37sin4jz4.appsync-api.us-east-1.amazonaws.com/graphql",
+  "aws_appsync_region": "us-east-1",
+  "aws_appsync_authenticationType": "API_KEY",
+  "aws_appsync_apiKey": "da2-nzmizkwpvjfc3lnh5llknofeqm",
+  "aws_cognito_region": "us-east-1",
+  "aws_user_pools_id": "us-east-1_I9ppzRYwO",
+  "aws_user_pools_web_client_id": "15fn5bb1fl3nnnsujt79f4s3b9",
+  "oauth": {
+    "domain": "bandit-administrator-test.auth.us-east-1.amazoncognito.com",
+    "scope": ["openid", "profile", "email"],
+    "redirectSignIn": "https://banditarena.com/auth/callback",
+    "redirectSignOut": "https://banditarena.com/",
+    "responseType": "code"
+  },
+  "aws_cognito_username_attributes": [],
+  "aws_cognito_social_providers": [],
+  "aws_cognito_signup_attributes": [],
+  "aws_cognito_mfa_types": [],
+  "aws_cognito_password_protection_settings": {
+    "passwordPolicyCharacters": []
+  },
+  "aws_cognito_verification_mechanisms": []
+}
