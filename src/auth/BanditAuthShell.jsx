@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material'
+import { Authenticator, ThemeProvider, useAuthenticator } from '@aws-amplify/ui-react'
+import '@aws-amplify/ui-react/styles.css'
+import './auth-overrides.css'
+import { Box, Button, CircularProgress, Typography } from '@mui/material'
+import { banditAuthTheme } from './banditAuthTheme'
+import { banditAuthenticatorComponents } from './banditAuthenticatorComponents'
 
 const FADE_DURATION_MS = 1800
 const DISPLAY_DURATION_MS = 10000
@@ -35,7 +40,7 @@ function preloadImage(src) {
   })
 }
 
-export default function LoginSplash({ authError, onSignIn, isCheckingSession = false, isSigningIn = false }) {
+function BrandedBackdrop({ children }) {
   const sessionOrder = useMemo(() => {
     if (!backgroundImages.length) {
       return []
@@ -51,7 +56,6 @@ export default function LoginSplash({ authError, onSignIn, isCheckingSession = f
   }, [sessionOrder])
 
   const [currentImage, setCurrentImage] = useState(() => (startIndex >= 0 ? sessionOrder[startIndex] : null))
-
   const [incomingImage, setIncomingImage] = useState(null)
   const [isCrossfading, setIsCrossfading] = useState(false)
   const currentIndexRef = useRef(startIndex)
@@ -186,57 +190,88 @@ export default function LoginSplash({ authError, onSignIn, isCheckingSession = f
           <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.78)', mb: 3 }}>
             Secure operator access for the Bandit Arena Console.
           </Typography>
-
-          {authError ? (
-            <Alert severity="error" sx={{ textAlign: 'left' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Authentication setup error
-              </Typography>
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                {authError}
-              </Typography>
-              <Button
-                variant="contained"
-                color="error"
-                size="small"
-                onClick={onSignIn}
-                disabled={isSigningIn}
-              >
-                Retry Sign In
-              </Button>
-            </Alert>
-          ) : isCheckingSession ? (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-              <CircularProgress size={34} thickness={4.2} />
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.76)' }}>
-                Checking secure session...
-              </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-              <Button
-                variant="contained"
-                size="large"
-                onClick={onSignIn}
-                disabled={isSigningIn}
-                startIcon={isSigningIn ? <CircularProgress size={16} color="inherit" /> : null}
-                sx={{
-                  minWidth: 230,
-                  py: 1.3,
-                  borderRadius: 999,
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                }}
-              >
-                {isSigningIn ? 'Signing In...' : 'Sign In to Console'}
-              </Button>
-              <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.64)' }}>
-                You will be redirected to secure authentication.
-              </Typography>
-            </Box>
-          )}
+          {children}
         </Box>
       </Box>
     </Box>
+  )
+}
+
+export function BanditAuthLoadingShell() {
+  return (
+    <BrandedBackdrop>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+        <CircularProgress size={34} thickness={4.2} sx={{ color: '#4db6c4' }} />
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.76)' }}>
+          Loading secure sign-in...
+        </Typography>
+      </Box>
+    </BrandedBackdrop>
+  )
+}
+
+export function BanditLocalBypassShell({ onEnter, isEntering = false }) {
+  return (
+    <BrandedBackdrop>
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        <Button
+          variant="contained"
+          size="large"
+          onClick={onEnter}
+          disabled={isEntering}
+          startIcon={isEntering ? <CircularProgress size={16} color="inherit" /> : null}
+          sx={{
+            minWidth: 230,
+            py: 1.3,
+            borderRadius: 999,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            bgcolor: '#4db6c4',
+            '&:hover': { bgcolor: '#7ed4df' },
+          }}
+        >
+          {isEntering ? 'Entering...' : 'Enter Console'}
+        </Button>
+        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.64)' }}>
+          Local lab mode — authentication bypass enabled.
+        </Typography>
+      </Box>
+    </BrandedBackdrop>
+  )
+}
+
+function BrandedAuthenticator() {
+  return (
+    <Box className="bandit-auth-shell" sx={{ width: '100%' }}>
+      <ThemeProvider theme={banditAuthTheme} colorMode="dark">
+        <Authenticator
+          hideSignUp
+          loginMechanisms={['username']}
+          components={banditAuthenticatorComponents}
+        />
+      </ThemeProvider>
+    </Box>
+  )
+}
+
+export default function CognitoAuthGate({ children }) {
+  const { authStatus } = useAuthenticator((context) => [context.authStatus])
+
+  if (authStatus === 'authenticated') {
+    return children
+  }
+
+  return (
+    <BrandedBackdrop>
+      <BrandedAuthenticator />
+    </BrandedBackdrop>
+  )
+}
+
+export function CognitoAuthRoot({ children }) {
+  return (
+    <Authenticator.Provider>
+      <CognitoAuthGate>{children}</CognitoAuthGate>
+    </Authenticator.Provider>
   )
 }

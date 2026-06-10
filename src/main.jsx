@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import App from './App'
+import { isCloudDeployment, isLocalWebDev } from './config/runtime'
 
 const DEFAULT_OAUTH_SCOPES = ['openid', 'profile', 'email']
 
@@ -32,19 +33,25 @@ function buildOAuthConfig(config) {
   }
 
   const currentOrigin = getCurrentOrigin()
+  const preferCurrentOrigin = currentOrigin && (isCloudDeployment() || isLocalWebDev())
+  const redirectSignIn =
+    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_IN ||
+    (preferCurrentOrigin
+      ? `${currentOrigin}/auth/callback`
+      : existingOauth?.redirectSignIn || `${currentOrigin}/auth/callback`)
+  const redirectSignOut =
+    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT ||
+    (preferCurrentOrigin
+      ? `${currentOrigin}/`
+      : existingOauth?.redirectSignOut || `${currentOrigin}/`)
+
   return {
     ...config,
     oauth: {
       ...existingOauth,
       domain: oauthDomain,
-      redirectSignIn:
-        import.meta.env.VITE_COGNITO_REDIRECT_SIGN_IN ||
-        existingOauth?.redirectSignIn ||
-        `${currentOrigin}/auth/callback`,
-      redirectSignOut:
-        import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT ||
-        existingOauth?.redirectSignOut ||
-        `${currentOrigin}/`,
+      redirectSignIn,
+      redirectSignOut,
       responseType:
         import.meta.env.VITE_COGNITO_OAUTH_RESPONSE_TYPE || existingOauth?.responseType || 'code',
       scopes: parseScopes(import.meta.env.VITE_COGNITO_OAUTH_SCOPES || existingOauth?.scopes),

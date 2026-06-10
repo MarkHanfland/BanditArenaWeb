@@ -1,3 +1,5 @@
+import { isCloudDeployment, isLocalWebDev } from '../config/runtime'
+
 function normalizeCognitoDomain(rawDomain) {
   if (typeof rawDomain !== 'string') {
     throw new Error('Cognito OAuth domain is not configured')
@@ -27,6 +29,17 @@ function getCurrentOrigin() {
     return ''
   }
   return window.location.origin
+}
+
+/** Prefer the current browser origin when PKCE state must match the callback URL. */
+function resolveOAuthRedirectUri(envOverride, oauthValue, origin, path) {
+  if (envOverride) {
+    return envOverride
+  }
+  if (origin && (isCloudDeployment() || isLocalWebDev())) {
+    return `${origin}${path}`
+  }
+  return oauthValue || (origin ? `${origin}${path}` : path)
 }
 
 function parseScopes(rawScopes) {
@@ -75,15 +88,19 @@ export function loadAuthConfig() {
       'bandit-administrator-test.auth.us-east-1.amazoncognito.com',
   )
 
-  const redirectUri =
-    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_IN ||
-    oauth?.redirectSignIn ||
-    `${origin}/auth/callback`
+  const redirectUri = resolveOAuthRedirectUri(
+    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_IN,
+    oauth?.redirectSignIn,
+    origin,
+    '/auth/callback',
+  )
 
-  const logoutUri =
-    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT ||
-    oauth?.redirectSignOut ||
-    `${origin}/`
+  const logoutUri = resolveOAuthRedirectUri(
+    import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT,
+    oauth?.redirectSignOut,
+    origin,
+    '/',
+  )
 
   const scope = parseScopes(import.meta.env.VITE_COGNITO_OAUTH_SCOPES || oauth?.scopes)
 

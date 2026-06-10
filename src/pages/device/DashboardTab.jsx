@@ -8,11 +8,100 @@ const POSITION_HISTORY_MAX_DURATION_MS = 3 * 60 * 1000 // 3 minutes in milliseco
 
 // Zoom-invariant UI scales (baseline sizes rendered at 100% zoom)
 const BASELINE_ICON_PX = 10
-const TREAD_HEX_SCALE = 2.0
+const TREAD_HEX_SCALE = 1.5 // 25% smaller than original 2.0 — tread surface hex tile size
 const COMPASS_SCALE = 1.75
 const GRADE_SCALE = 1.75
-const LEFT_USER_ICON_SCALE = 3.0
-const RIGHT_USER_ICON_SCALE = 1.75
+const USER_ICON_SCALE = 1.75
+const REFERENCE_VIEW_SIZE = 600
+const COMPASS_NATIVE_SIZE = 100
+const COMPASS_CENTER = COMPASS_NATIVE_SIZE / 2
+const COMPASS_VISUAL_RADIUS = 55 // ring + rotating TREAD/USER/cardinal labels
+const GRADE_NATIVE_WIDTH = 150
+const GRADE_NATIVE_HEIGHT = 92
+const GRADE_CENTER_X = GRADE_NATIVE_WIDTH / 2
+const GRADE_CENTER_Y_FROM_BOTTOM = GRADE_NATIVE_HEIGHT / 2
+const GRADE_VISUAL_RADIUS = 78 // disk + traveling grade label
+const TREAD_WALL_GAP_PX = 10
+const COMPASS_TREAD_GAP_PX = 4 // tighter clearance toward tread (more room on screen-left for labels)
+const TREAD_GRAPHIC_SIDE_INSET = 15 // extra margin each side around tread circle
+const TREAD_VIEW_PADDING = 40 + TREAD_GRAPHIC_SIDE_INSET
+const COMPASS_CORNER_MARGIN = 12
+const COMPASS_LABEL_MARGIN = 16 // extra clearance for rotating labels
+const COMPASS_LEFT_MARGIN = COMPASS_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET + COMPASS_LABEL_MARGIN
+const GRADE_CORNER_MARGIN = 12
+const GRADE_LABEL_MARGIN = 10
+
+/** Largest uniform scale where a corner widget's bounding circle clears the tread outer wall. */
+function maxCornerWidgetScale({
+  anchorX,
+  anchorY,
+  nativeCenterX,
+  nativeCenterY,
+  visualRadius,
+  labelMargin,
+  treadCenterX,
+  treadCenterY,
+  treadOuterRadius,
+  treadGap = TREAD_WALL_GAP_PX,
+}) {
+  const minCenterDistance = treadOuterRadius + treadGap
+  let lo = 0
+  let hi = 4
+
+  for (let i = 0; i < 48; i += 1) {
+    const scale = (lo + hi) / 2
+    const widgetCenterX = anchorX + nativeCenterX * scale
+    const widgetCenterY = anchorY + nativeCenterY * scale
+    const widgetRadius = (visualRadius + labelMargin) * scale
+    const distance = Math.hypot(widgetCenterX - treadCenterX, widgetCenterY - treadCenterY)
+
+    if (distance >= minCenterDistance + widgetRadius) {
+      lo = scale
+    } else {
+      hi = scale
+    }
+  }
+
+  return lo
+}
+
+function maxCompassCornerScale(treadCenterX, treadCenterY, treadOuterRadius) {
+  return maxCornerWidgetScale({
+    anchorX: COMPASS_LEFT_MARGIN,
+    anchorY: COMPASS_CORNER_MARGIN,
+    nativeCenterX: COMPASS_CENTER,
+    nativeCenterY: COMPASS_CENTER,
+    visualRadius: COMPASS_VISUAL_RADIUS,
+    labelMargin: COMPASS_LABEL_MARGIN,
+    treadCenterX,
+    treadCenterY,
+    treadOuterRadius,
+    treadGap: COMPASS_TREAD_GAP_PX,
+  })
+}
+
+function maxGradeCornerScale(panelHeight, treadCenterX, treadCenterY, treadOuterRadius) {
+  const gradeLeft = GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
+  const minCenterDistance = treadOuterRadius + TREAD_WALL_GAP_PX
+  let lo = 0
+  let hi = 4
+
+  for (let i = 0; i < 48; i += 1) {
+    const scale = (lo + hi) / 2
+    const widgetCenterX = gradeLeft + GRADE_CENTER_X * scale
+    const widgetCenterY = panelHeight - GRADE_CORNER_MARGIN - GRADE_CENTER_Y_FROM_BOTTOM * scale
+    const widgetRadius = (GRADE_VISUAL_RADIUS + GRADE_LABEL_MARGIN) * scale
+    const distance = Math.hypot(widgetCenterX - treadCenterX, widgetCenterY - treadCenterY)
+
+    if (distance >= minCenterDistance + widgetRadius) {
+      lo = scale
+    } else {
+      hi = scale
+    }
+  }
+
+  return lo
+}
 
 
 // Stylish speed meter component
@@ -130,7 +219,7 @@ function SessionStat({ label, value, color }) {
 }
 
 // Compass component - shows tread and user facing direction
-function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed, scale = 1 }) {
+function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed, scale = 1, left = COMPASS_LEFT_MARGIN, top = COMPASS_CORNER_MARGIN }) {
   const compassSize = 100
   const center = compassSize / 2
   const outerRadius = 42
@@ -175,8 +264,8 @@ function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed
   return (
     <Box sx={{
       position: 'absolute',
-      top: 16,
-      left: 40,
+      top,
+      left,
       zIndex: 100,
       pointerEvents: 'none',
       transform: `scale(${scale})`,
@@ -387,7 +476,7 @@ function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed
 //
 // The grade % label travels to the uphill rim point, correctly rotating around the full perimeter.
 // Gradient dark side = uphill, light side = downhill.
-function GradeIndicator({ rollDeg, pitchDeg, scale = 1 }) {
+function GradeIndicator({ rollDeg, pitchDeg, scale = 1, left = GRADE_CORNER_MARGIN, bottom = GRADE_CORNER_MARGIN }) {
   const W = 150
   const H = 92
   const cx = W / 2   // 75
@@ -445,7 +534,7 @@ function GradeIndicator({ rollDeg, pitchDeg, scale = 1 }) {
   const gradeLabelText = showGrade ? `${gradeMagPct.toFixed(1)}%` : null
 
   return (
-    <Box sx={{ position: 'absolute', bottom: 16, left: 16, zIndex: 100, pointerEvents: 'none', transform: `scale(${scale})`, transformOrigin: 'bottom left' }}>
+    <Box sx={{ position: 'absolute', bottom, left, zIndex: 100, pointerEvents: 'none', transform: `scale(${scale})`, transformOrigin: 'bottom left' }}>
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} overflow="visible">
         <defs>
           <linearGradient
@@ -533,24 +622,25 @@ function DashboardTab() {
   const lastTimeRef = useRef(performance.now())
   const treadmillStateRef = useRef(null)
   const lastNonZeroUserDirRef = useRef({ x: 0, y: 1 })
-  const initialDimensionsRef = useRef(null)
   const hexScaleRef = useRef(TREAD_HEX_SCALE)
-  const prevHexScaleRef = useRef(TREAD_HEX_SCALE)
+  const prevUiScaleRef = useRef(1)
 
-  // counterZoom must be declared before any useEffect that references it.
-  // Ratio of current CSS container width to initial width — when browser zooms in,
-  // CSS pixels shrink proportionally, so this equals 1/zoomFactor automatically.
-  const counterZoom = initialDimensionsRef.current ? dimensions.width / initialDimensionsRef.current : 1.0
+  // Scale overlays and tread hex tiles relative to the current viewer size.
+  const uiScale = useMemo(() => {
+    const size = Math.min(dimensions.width, dimensions.height)
+    if (size <= 0) {
+      return 1
+    }
+    return size / REFERENCE_VIEW_SIZE
+  }, [dimensions.width, dimensions.height])
 
-  // Session tracking state (server-side, avoids uint64 precision issues and page-refresh loss)
+  const MAX_CONSECUTIVE_FAILURES = 5 // Show disconnected state after 5 consecutive failures
   const [sessionDurationSec, setSessionDurationSec] = useState(0)
   const [vrDistanceMeters, setVrDistanceMeters] = useState(0)
   const [openxrRuntimeName, setOpenxrRuntimeName] = useState('Unknown')
   const [openxrLinkHealthy, setOpenxrLinkHealthy] = useState(null)
 
-  const MAX_CONSECUTIVE_FAILURES = 5 // Show disconnected state after 5 consecutive failures
-
-  // Fetch initial config
+  // Session tracking state (server-side, avoids uint64 precision issues and page-refresh loss)
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await getConfig()
@@ -735,28 +825,24 @@ function DashboardTab() {
     }
   }, [config])
 
-  // When browser zoom changes, update hexScaleRef and rescale animation offset to maintain visual phase
+  // When viewer size changes, rescale hex tile period so tread animation stays continuous.
   useEffect(() => {
-    const newHexScale = TREAD_HEX_SCALE * counterZoom
-    const oldHexScale = prevHexScaleRef.current
-    if (newHexScale !== oldHexScale) {
+    const newHexScale = TREAD_HEX_SCALE * uiScale
+    const oldHexScale = hexScaleRef.current
+    if (newHexScale !== oldHexScale && oldHexScale > 0) {
       const ratio = newHexScale / oldHexScale
       setAnimationOffset(prev => ({ ...prev, x: prev.x * ratio, y: prev.y * ratio }))
       hexScaleRef.current = newHexScale
-      prevHexScaleRef.current = newHexScale
+      prevUiScaleRef.current = uiScale
     }
-  }, [counterZoom])
+  }, [uiScale])
 
-  // Handle container resize — also captures the initial size on first call so counterZoom
-  // can be derived from dimensions alone (no devicePixelRatio detection needed).
+  // Handle container resize
   useEffect(() => {
     const updateDimensions = () => {
       if (canvasContainerRef.current) {
         const rect = canvasContainerRef.current.getBoundingClientRect()
         const size = Math.min(rect.width - 20, rect.height - 20)
-        if (initialDimensionsRef.current === null && size > 0) {
-          initialDimensionsRef.current = size
-        }
         setDimensions({ width: size, height: size })
       }
     }
@@ -774,8 +860,8 @@ function DashboardTab() {
     const safetyWallThickness = config.tread.safety_wall_thickness_meters || 0.5
     const outerDiameter = treadDiameter + (safetyWallThickness * 2)
 
-    // Calculate pixel scale to fit in container with padding
-    const padding = 40
+    // Calculate pixel scale to fit in container with padding (+15px side inset for corner overlays)
+    const padding = TREAD_VIEW_PADDING
     const availableSize = Math.min(dimensions.width, dimensions.height) - padding * 2
     const scale = availableSize / outerDiameter
 
@@ -793,6 +879,33 @@ function DashboardTab() {
       centerY: dimensions.height / 2
     }
   }, [config, dimensions])
+
+  const treadUserIconSize = BASELINE_ICON_PX * USER_ICON_SCALE * uiScale
+
+  const cornerOverlayLayout = useMemo(() => {
+    if (!svgConfig) {
+      return null
+    }
+
+    const { centerX, centerY, outerRadius } = svgConfig
+    const panelHeight = dimensions.height
+
+    const compassScale = maxCompassCornerScale(centerX, centerY, outerRadius)
+    const gradeScale = maxGradeCornerScale(panelHeight, centerX, centerY, outerRadius)
+
+    return {
+      compass: {
+        left: COMPASS_LEFT_MARGIN,
+        top: COMPASS_CORNER_MARGIN,
+        scale: Math.max(0.35, compassScale),
+      },
+      grade: {
+        left: GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET,
+        bottom: GRADE_CORNER_MARGIN,
+        scale: Math.max(0.35, gradeScale),
+      },
+    }
+  }, [svgConfig, dimensions.height])
 
   // Calculate user position in SVG coordinates
   const userPosition = useMemo(() => {
@@ -1132,6 +1245,7 @@ function DashboardTab() {
             backgroundColor: 'transparent',
             position: 'relative',
             height: '100%',
+            overflow: 'visible',
             borderRight: 1,
             borderColor: 'divider'
           }}
@@ -1175,13 +1289,13 @@ function DashboardTab() {
                 it does NOT resize the tile period. Animation translate keeps scrolling. */}
               <pattern
                 id="hexPattern"
-                width={90 * TREAD_HEX_SCALE * counterZoom}
-                height={78 * TREAD_HEX_SCALE * counterZoom}
+                width={90 * TREAD_HEX_SCALE * uiScale}
+                height={78 * TREAD_HEX_SCALE * uiScale}
                 patternUnits="userSpaceOnUse"
                 patternTransform={`translate(${animationOffset.x} ${animationOffset.y})`}
               >
-                <g fill="none" stroke="#0f0f0f" strokeWidth={8 * TREAD_HEX_SCALE * counterZoom}>
-                  <polygon points={`${45 * TREAD_HEX_SCALE * counterZoom},0 ${90 * TREAD_HEX_SCALE * counterZoom},${22.5 * TREAD_HEX_SCALE * counterZoom} ${90 * TREAD_HEX_SCALE * counterZoom},${55.5 * TREAD_HEX_SCALE * counterZoom} ${45 * TREAD_HEX_SCALE * counterZoom},${78 * TREAD_HEX_SCALE * counterZoom} 0,${55.5 * TREAD_HEX_SCALE * counterZoom} 0,${22.5 * TREAD_HEX_SCALE * counterZoom}`} />
+                <g fill="none" stroke="#0f0f0f" strokeWidth={8 * TREAD_HEX_SCALE * uiScale}>
+                  <polygon points={`${45 * TREAD_HEX_SCALE * uiScale},0 ${90 * TREAD_HEX_SCALE * uiScale},${22.5 * TREAD_HEX_SCALE * uiScale} ${90 * TREAD_HEX_SCALE * uiScale},${55.5 * TREAD_HEX_SCALE * uiScale} ${45 * TREAD_HEX_SCALE * uiScale},${78 * TREAD_HEX_SCALE * uiScale} 0,${55.5 * TREAD_HEX_SCALE * uiScale} 0,${22.5 * TREAD_HEX_SCALE * uiScale}`} />
                 </g>
               </pattern>
 
@@ -1337,21 +1451,21 @@ function DashboardTab() {
                 <circle
                   cx={0}
                   cy={0}
-                  r={BASELINE_ICON_PX * LEFT_USER_ICON_SCALE * 2 * counterZoom}
-                  fill="rgba(77, 182, 196, 0.3)"
+                  r={treadUserIconSize * 2}
+                  fill="rgba(77, 182, 196, 0.25)"
                 />
                 {/* User marker */}
                 <circle
                   cx={0}
                   cy={0}
-                  r={BASELINE_ICON_PX * LEFT_USER_ICON_SCALE * counterZoom}
+                  r={treadUserIconSize}
                   fill="#4db6c4"
                   stroke="#ffffff"
-                  strokeWidth="2"
+                  strokeWidth={Math.max(1.5, treadUserIconSize / 5)}
                 />
                 {/* User direction indicator (triangle pointing in facing direction) */}
                 {(() => {
-                  const markerRadius = BASELINE_ICON_PX * LEFT_USER_ICON_SCALE * counterZoom
+                  const markerRadius = treadUserIconSize
                   const tip = markerRadius * 1.8
                   const baseX = markerRadius * 0.6
                   const baseY = markerRadius * 0.8
@@ -1389,14 +1503,18 @@ function DashboardTab() {
             userDirection={userDirectionVectorForUi}
             treadSpeed={speeds.treadSpeed}
             userSpeed={speeds.avatarSpeed}
-            scale={COMPASS_SCALE * counterZoom}
+            scale={cornerOverlayLayout?.compass.scale ?? COMPASS_SCALE * uiScale}
+            left={cornerOverlayLayout?.compass.left ?? COMPASS_LEFT_MARGIN}
+            top={cornerOverlayLayout?.compass.top ?? COMPASS_CORNER_MARGIN}
           />
 
           {/* Grade indicator in lower left corner */}
           <GradeIndicator
             rollDeg={treadmillState?.treadTilt?.x || 0}
             pitchDeg={treadmillState?.treadTilt?.y || 0}
-            scale={GRADE_SCALE * counterZoom}
+            scale={cornerOverlayLayout?.grade.scale ?? GRADE_SCALE * uiScale}
+            left={cornerOverlayLayout?.grade.left ?? GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET}
+            bottom={cornerOverlayLayout?.grade.bottom ?? GRADE_CORNER_MARGIN}
           />
         </Box>
 
@@ -1411,18 +1529,22 @@ function DashboardTab() {
 function VRPositionViewer({ userState }) {
   const containerRef = useRef(null)
   const [dimensions, setDimensions] = useState({ width: 600, height: 600 })
-  const initialDimensionsRef = useRef(null)
   const [positionHistory, setPositionHistory] = useState([]) // Array of {x, y, timestamp}
 
-  // Handle container resize — capture initial size for zoom-immune icon sizing
+  const uiScale = useMemo(() => {
+    const size = Math.min(dimensions.width, dimensions.height)
+    if (size <= 0) {
+      return 1
+    }
+    return size / REFERENCE_VIEW_SIZE
+  }, [dimensions.width, dimensions.height])
+
+  // Handle container resize
   useEffect(() => {
     const updateDimensions = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect()
         const size = Math.min(rect.width - 20, rect.height - 20)
-        if (initialDimensionsRef.current === null && size > 0) {
-          initialDimensionsRef.current = size
-        }
         setDimensions({ width: size, height: size })
       }
     }
@@ -1603,10 +1725,8 @@ function VRPositionViewer({ userState }) {
     return lines
   }, [viewConfig, bounds, worldToSvg])
 
-  // Icon size: 175% of 10px baseline. counterZoom derived from container resize — same
-  // mechanism that keeps the SVG rendering correct, so guaranteed to track browser zoom.
-  const counterZoom = initialDimensionsRef.current ? dimensions.width / initialDimensionsRef.current : 1.0
-  const iconSize = BASELINE_ICON_PX * RIGHT_USER_ICON_SCALE * counterZoom
+  // Icon size scales with the VR viewer panel size (matches tread user marker).
+  const iconSize = BASELINE_ICON_PX * USER_ICON_SCALE * uiScale
 
   return (
     <Box

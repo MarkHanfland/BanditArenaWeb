@@ -1,0 +1,41 @@
+/* Bandit-branded Amplify Authenticator overrides */
+
+.bandit-auth-shell [data-amplify-authenticator] {
+  width: 100%;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] form {
+  width: 100%;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-flex {
+  flex-direction: column;
+  align-items: center;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-field-group,
+.bandit-auth-shell [data-amplify-authenticator] .amplify-field-group__field-wrapper,
+.bandit-auth-shell [data-amplify-authenticator] .amplify-textfield,
+.bandit-auth-shell [data-amplify-authenticator] .amplify-passwordfield {
+  width: 100%;
+  max-width: 300px;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-label {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-input {
+  width: 100%;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] input[type='password'] {
+  text-align: center;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-button[data-variation='primary'] {
+  width: 100%;
+  max-width: 300px;
+}

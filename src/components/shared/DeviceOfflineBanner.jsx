@@ -7,8 +7,10 @@ export default function DeviceOfflineBanner() {
     <Box sx={{ px: 2, pt: 2 }}>
       <Alert severity="warning">
         <Typography variant="body2">
-          Local treadmill is offline. Start Bandit Arena on this machine and ensure the REST API is
-          listening at {getDeviceApiBaseUrl()}.
+          Local treadmill is offline or blocked by browser CORS. Start Bandit Arena on this
+          machine and ensure the REST API is listening at {getDeviceApiBaseUrl()}. When using
+          the cloud site (banditarena.com), rebuild and restart bandit_arena.exe so CORS allows
+          the cloud origin.
         </Typography>
       </Alert>
     </Box>

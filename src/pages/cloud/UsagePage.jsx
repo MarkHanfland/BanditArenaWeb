@@ -1,26 +1,31 @@
 import React, { useEffect, useState } from 'react'
-import { Alert, CircularProgress, Stack, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Card,
+  CardContent,
+  CircularProgress,
+  Grid,
+  Stack,
+  Typography,
+} from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
-import { listProducts, listProductInstances } from '../../api/cloud'
+import { getAnalyticsSummary } from '../../api/cloud'
 
 export default function UsagePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [summary, setSummary] = useState({ products: 0, instances: 0 })
+  const [summary, setSummary] = useState(null)
 
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const [productsRes, instancesRes] = await Promise.all([listProducts(), listProductInstances()])
+      const { data, error: apiError } = await getAnalyticsSummary()
       if (!mounted) return
-      const apiError = productsRes.error || instancesRes.error
       if (apiError) {
         setError(apiError)
       } else {
-        setSummary({
-          products: productsRes.data?.products?.length || 0,
-          instances: instancesRes.data?.instances?.length || 0,
-        })
+        setSummary(data)
       }
       setLoading(false)
     })()
@@ -31,16 +36,51 @@ export default function UsagePage() {
 
   return (
     <PageScaffold
-      title="Usage"
+      title="Analytics"
       category="Cloud"
-      description="Aggregated fleet usage metrics across registered Bandit products."
+      description="Fleet and session analytics dashboard (SVC-011)."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
-      {!loading && !error && (
-        <Stack spacing={1}>
-          <Typography variant="body2">Products: {summary.products}</Typography>
-          <Typography variant="body2">Instances: {summary.instances}</Typography>
+      {!loading && !error && summary && (
+        <Stack spacing={3}>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="overline" color="text.secondary">Sessions (7d)</Typography>
+                  <Typography variant="h4">{summary.sessionsCompleted}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="overline" color="text.secondary">Active Devices</Typography>
+                  <Typography variant="h4">{summary.activeDevices}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="overline" color="text.secondary">Enrolled Users</Typography>
+                  <Typography variant="h4">{summary.enrolledUsers}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>Weekly session trend</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {(summary.weeklySessionTrend || []).join(' → ')}
+            </Typography>
+          </Box>
+          {(summary.alerts || []).map((alert) => (
+            <Alert key={alert.id} severity={alert.severity === 'info' ? 'info' : 'warning'}>
+              {alert.message}
+            </Alert>
+          ))}
         </Stack>
       )}
     </PageScaffold>
