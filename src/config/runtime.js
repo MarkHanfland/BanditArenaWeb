@@ -31,7 +31,7 @@ export function getDeviceApiBaseUrl() {
     return configured.replace(/\/$/, '')
   }
   if (isCloudDeployment()) {
-    return 'http://localhost:8080'
+    return 'http://localhost:9724'
   }
   return window.location.origin
 }

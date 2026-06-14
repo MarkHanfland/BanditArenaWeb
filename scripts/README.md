@@ -14,7 +14,7 @@ cd c:\GitHub\BanditArenaWeb
 
 Or use the VS Code task **BanditArenaWeb Start Local** from the workspace root.
 
-Start Bandit Arena locally so device pages can reach `http://localhost:8080`.
+Start Bandit Arena locally so device pages can reach `http://localhost:9724`.
 
 ## Production deploy
 

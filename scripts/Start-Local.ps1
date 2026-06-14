@@ -7,7 +7,7 @@
     Ensures local env configuration exists, installs npm dependencies when needed,
     and runs the dev server on http://localhost:5173.
 
-    Device pages call the Bandit Arena REST API at http://localhost:8080.
+    Device pages call the Bandit Arena REST API at http://localhost:9724.
     Cloud pages use /api (proxied to API Gateway in dev).
 
 .EXAMPLE
@@ -46,7 +46,7 @@ try {
     }
 
     Write-Host 'Starting BanditArenaWeb dev server on http://localhost:5173' -ForegroundColor Cyan
-    Write-Host 'Device API: http://localhost:8080 | Cloud API: /api (proxied)' -ForegroundColor Cyan
+    Write-Host 'Device API: http://localhost:9724 | Cloud API: /api (proxied)' -ForegroundColor Cyan
     Write-Host 'Press Ctrl+C to stop' -ForegroundColor Yellow
     Write-Host ''
 
