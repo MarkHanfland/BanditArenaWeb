@@ -3,7 +3,7 @@
   "aws_cloud_logic_custom": [
     {
       "name": "BanditAPI",
-      "endpoint": "https://it0ra3hy4l.execute-api.us-east-1.amazonaws.com/dev",
+      "endpoint": "https://5m4r4paxza.execute-api.us-east-1.amazonaws.com/prod",
       "region": "us-east-1"
     }
   ],

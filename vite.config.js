@@ -5,7 +5,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const cloudApiTarget =
     env.VITE_CLOUD_API_PROXY_TARGET ||
-    'https://it0ra3hy4l.execute-api.us-east-1.amazonaws.com/dev'
+    'https://5m4r4paxza.execute-api.us-east-1.amazonaws.com/prod'
 
   return {
     plugins: [react()],
