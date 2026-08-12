@@ -182,6 +182,70 @@ export async function registerProductInstance(payload) {
 
 
 
+export async function provisionDevice(payload) {
+
+  return request(() => cloudApi.post('/devices/provision', payload))
+
+}
+
+
+
+export async function activateDevice(deviceId, payload = {}) {
+
+  return request(() => cloudApi.post(`/devices/${deviceId}/activate`, payload))
+
+}
+
+
+
+export async function decommissionDevice(deviceId, payload = {}) {
+
+  return request(() => cloudApi.post(`/devices/${deviceId}/decommission`, payload))
+
+}
+
+
+
+export async function transferDevice(deviceId, payload = {}) {
+
+  return request(() => cloudApi.post(`/devices/${deviceId}/transfer`, payload))
+
+}
+
+
+
+export async function getModelInventoryPreset(productId) {
+
+  return request(() => cloudApi.get(`/products/${productId}/inventory-preset`))
+
+}
+
+
+
+export async function getDeviceInventory(deviceId) {
+
+  return request(() => cloudApi.get(`/devices/${deviceId}/inventory`))
+
+}
+
+
+
+export async function listDeviceMaintenance(deviceId) {
+
+  return request(() => cloudApi.get(`/devices/${deviceId}/maintenance`))
+
+}
+
+
+
+export async function createDeviceMaintenance(deviceId, payload) {
+
+  return request(() => cloudApi.post(`/devices/${deviceId}/maintenance`, payload))
+
+}
+
+
+
 export async function getProductComponents(productId) {
 
   return request(() => cloudApi.get(`/products/${productId}/components`))
@@ -201,6 +265,62 @@ export async function createSession(payload) {
 export async function checkUpdates(params) {
 
   return request(() => cloudApi.get('/updates/check', { params }))
+
+}
+
+
+
+export async function listLicenses() {
+
+  return request(() => cloudApi.get('/licenses'))
+
+}
+
+
+
+export async function issueLicense(payload) {
+
+  return request(() => cloudApi.post('/licenses', payload))
+
+}
+
+
+
+export async function assignLicense(licenseId, payload) {
+
+  return request(() => cloudApi.post(`/licenses/${licenseId}/assign`, payload))
+
+}
+
+
+
+export async function revokeLicense(licenseId, payload = {}) {
+
+  return request(() => cloudApi.post(`/licenses/${licenseId}/revoke`, payload))
+
+}
+
+
+
+export async function checkDeviceEntitlement(deviceId, payload = {}) {
+
+  return request(() => cloudApi.post(`/devices/${deviceId}/entitlements/check`, payload))
+
+}
+
+
+
+export async function createUpdateDownloadToken(payload) {
+
+  return request(() => cloudApi.post('/updates/download-token', payload))
+
+}
+
+
+
+export async function acknowledgeUpdate(payload) {
+
+  return request(() => cloudApi.post('/updates/ack', payload))
 
 }
 

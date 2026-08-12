@@ -19,7 +19,15 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
-import { checkUpdates, listProductInstances, registerProductInstance } from '../../api/cloud'
+import {
+  activateDevice,
+  checkUpdates,
+  decommissionDevice,
+  issueLicense,
+  listProductInstances,
+  provisionDevice,
+  transferDevice,
+} from '../../api/cloud'
 
 export default function FleetPage() {
   const [loading, setLoading] = useState(true)
@@ -28,7 +36,13 @@ export default function FleetPage() {
   const [updateInfo, setUpdateInfo] = useState({})
   const [registerOpen, setRegisterOpen] = useState(false)
   const [deviceModel, setDeviceModel] = useState('BanditArena-Alpha')
+  const [computeSerialNumber, setComputeSerialNumber] = useState('')
   const [message, setMessage] = useState('')
+  const [messageSeverity, setMessageSeverity] = useState('success')
+  const [credentials, setCredentials] = useState(null)
+  const [transferTarget, setTransferTarget] = useState(null)
+  const [transferVenueId, setTransferVenueId] = useState('')
+  const [transferTenantId, setTransferTenantId] = useState('')
 
   const loadFleet = useCallback(async () => {
     setLoading(true)
@@ -59,15 +73,104 @@ export default function FleetPage() {
     loadFleet()
   }, [loadFleet])
 
-  const handleRegister = async () => {
+  const handleProvision = async () => {
     setMessage('')
-    const { data, error: apiError } = await registerProductInstance({ model: deviceModel })
+    const serial = computeSerialNumber.trim()
+    if (!serial) {
+      setMessageSeverity('error')
+      setMessage('Compute serial number (ASSY-COMPUTE) is required')
+      return
+    }
+    const { data, error: apiError } = await provisionDevice({
+      model: deviceModel,
+      computeSerialNumber: serial,
+    })
     if (apiError) {
+      setMessageSeverity('error')
       setMessage(apiError)
       return
     }
     setRegisterOpen(false)
-    setMessage(`Registered ${data?.instance?.instanceId}`)
+    setComputeSerialNumber('')
+    setCredentials(data?.oneTimeCredentials || null)
+    setMessageSeverity('success')
+    setMessage(`Provisioned ${data?.instance?.instanceId} (SN ${serial}) — save credentials now`)
+    await loadFleet()
+  }
+
+  const handleActivate = async (instanceId) => {
+    setMessage('')
+    const { data, error: apiError } = await activateDevice(instanceId, {})
+    if (apiError) {
+      setMessageSeverity('error')
+      setMessage(apiError)
+      return
+    }
+    setMessageSeverity('success')
+    setMessage(`Activated ${data?.instance?.instanceId}`)
+    await loadFleet()
+  }
+
+  const handleDecommission = async (instanceId) => {
+    setMessage('')
+    const { data, error: apiError } = await decommissionDevice(instanceId, {
+      reason: 'operator_ui',
+    })
+    if (apiError) {
+      setMessageSeverity('error')
+      setMessage(apiError)
+      return
+    }
+    setMessageSeverity('success')
+    setMessage(`Decommissioned ${data?.instance?.instanceId}`)
+    await loadFleet()
+  }
+
+  const openTransfer = (instance) => {
+    setTransferTarget(instance)
+    setTransferVenueId(instance.venueId || '')
+    setTransferTenantId('')
+  }
+
+  const handleTransfer = async () => {
+    if (!transferTarget) return
+    setMessage('')
+    const venueId = transferVenueId.trim()
+    const tenantId = transferTenantId.trim()
+    if (!venueId && !tenantId) {
+      setMessageSeverity('error')
+      setMessage('Enter a venueId and/or tenantId to transfer')
+      return
+    }
+    const payload = {}
+    if (venueId) payload.venueId = venueId
+    if (tenantId) payload.tenantId = tenantId
+    const { data, error: apiError } = await transferDevice(transferTarget.instanceId, payload)
+    if (apiError) {
+      setMessageSeverity('error')
+      setMessage(apiError)
+      return
+    }
+    setTransferTarget(null)
+    setMessageSeverity('success')
+    setMessage(`Transferred ${data?.instance?.instanceId}`)
+    await loadFleet()
+  }
+
+  const handleAssignLicense = async (instanceId) => {
+    setMessage('')
+    const { data, error: apiError } = await issueLicense({
+      instanceId,
+      licenseTier: 'venue_pro',
+      features: ['session', 'content_base', 'ota'],
+    })
+    if (apiError) {
+      setMessageSeverity('error')
+      setMessage(apiError)
+      return
+    }
+    setMessageSeverity('success')
+    setMessage(`Issued ${data?.license?.licenseId} → ${instanceId} (${data?.license?.licenseTier})`)
     await loadFleet()
   }
 
@@ -75,23 +178,30 @@ export default function FleetPage() {
     <PageScaffold
       title="Fleet"
       category="Cloud"
-      description="Device registry and software update status (SVC-005, SVC-007)."
+      description="Device lifecycle: provision → license → entitlement → OTA check (SVC-005/006/007)."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
-      {message && <Alert severity="success" sx={{ mb: 2 }}>{message}</Alert>}
+      {message && (
+        <Alert severity={messageSeverity} sx={{ mb: 2 }}>
+          {message}
+        </Alert>
+      )}
       {!loading && !error && (
         <Stack spacing={2}>
           <Button variant="contained" onClick={() => setRegisterOpen(true)} data-testid="register-device">
-            Register Device
+            Provision Device
           </Button>
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Instance</TableCell>
+                <TableCell>Compute SN</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Firmware</TableCell>
+                <TableCell>License</TableCell>
                 <TableCell>Updates</TableCell>
+                <TableCell>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -101,9 +211,29 @@ export default function FleetPage() {
                   <TableRow key={instance.instanceId}>
                     <TableCell>{instance.instanceId}</TableCell>
                     <TableCell>
-                      <Chip size="small" label={instance.status} color={instance.status === 'online' ? 'success' : 'default'} />
+                      {instance.computeSerialNumber || instance.serialNumber || '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        label={instance.identityMismatch ? 'identity_mismatch' : instance.status}
+                        color={
+                          instance.identityMismatch || instance.status === 'decommissioned'
+                            ? 'error'
+                            : instance.status === 'online' || instance.status === 'active'
+                              ? 'success'
+                              : 'default'
+                        }
+                      />
                     </TableCell>
                     <TableCell>{instance.firmwareVersion}</TableCell>
+                    <TableCell>
+                      {instance.licenseTier || instance.licenseId ? (
+                        <Chip size="small" label={instance.licenseTier || instance.licenseId} color="info" />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {updates?.updateAvailable ? (
                         <Badge color="warning" badgeContent="1">
@@ -112,6 +242,50 @@ export default function FleetPage() {
                       ) : (
                         <Typography variant="body2" color="text.secondary">Up to date</Typography>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" spacing={1}>
+                        {instance.status === 'provisioned' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            data-testid={`activate-${instance.instanceId}`}
+                            onClick={() => handleActivate(instance.instanceId)}
+                          >
+                            Activate
+                          </Button>
+                        )}
+                        {instance.status !== 'decommissioned' && (
+                          <>
+                            {!instance.licenseId && instance.status !== 'provisioned' && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                data-testid={`license-${instance.instanceId}`}
+                                onClick={() => handleAssignLicense(instance.instanceId)}
+                              >
+                                Assign license
+                              </Button>
+                            )}
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              data-testid={`transfer-${instance.instanceId}`}
+                              onClick={() => openTransfer(instance)}
+                            >
+                              Transfer
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              data-testid={`decommission-${instance.instanceId}`}
+                              onClick={() => handleDecommission(instance.instanceId)}
+                            >
+                              Decommission
+                            </Button>
+                          </>
+                        )}
+                      </Stack>
                     </TableCell>
                   </TableRow>
                 )
@@ -122,19 +296,110 @@ export default function FleetPage() {
       )}
 
       <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Register Device</DialogTitle>
+        <DialogTitle>Provision Device</DialogTitle>
         <DialogContent>
+          <TextField
+            label="Compute serial number"
+            helperText="Unique ASSY-COMPUTE serial bound to the device certificate"
+            fullWidth
+            required
+            sx={{ mt: 1 }}
+            value={computeSerialNumber}
+            onChange={(e) => setComputeSerialNumber(e.target.value)}
+            inputProps={{ 'data-testid': 'register-compute-serial' }}
+          />
           <TextField
             label="Model"
             fullWidth
-            sx={{ mt: 1 }}
+            sx={{ mt: 2 }}
             value={deviceModel}
             onChange={(e) => setDeviceModel(e.target.value)}
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRegisterOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleRegister}>Register</Button>
+          <Button variant="contained" onClick={handleProvision} data-testid="register-device-submit">
+            Provision
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(transferTarget)}
+        onClose={() => setTransferTarget(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Transfer device</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 1 }}>
+            Reassign venue and/or tenant. Does not change compute serial or certificate binding.
+          </Typography>
+          <Typography variant="caption" display="block" gutterBottom>
+            {transferTarget?.instanceId}
+          </Typography>
+          <TextField
+            label="Venue ID"
+            fullWidth
+            sx={{ mt: 1 }}
+            value={transferVenueId}
+            onChange={(e) => setTransferVenueId(e.target.value)}
+            inputProps={{ 'data-testid': 'transfer-venue-id' }}
+          />
+          <TextField
+            label="Tenant ID (CA / FA cross-tenant)"
+            fullWidth
+            sx={{ mt: 2 }}
+            value={transferTenantId}
+            onChange={(e) => setTransferTenantId(e.target.value)}
+            helperText="Leave blank for same-tenant venue move"
+            inputProps={{ 'data-testid': 'transfer-tenant-id' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransferTarget(null)}>Cancel</Button>
+          <Button variant="contained" onClick={handleTransfer} data-testid="transfer-submit">
+            Transfer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(credentials)} onClose={() => setCredentials(null)} maxWidth="md" fullWidth>
+        <DialogTitle>One-time device credentials</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Private key is shown once and is not stored in the cloud. Install on the compute TPM/CNG
+            store, then discard.
+          </Alert>
+          <Typography variant="caption" display="block" gutterBottom>
+            Thumbprint: {credentials?.certificateThumbprint}
+          </Typography>
+          <Typography variant="caption" display="block" gutterBottom>
+            CN: {credentials?.certificateCn} ({credentials?.certificateSource})
+          </Typography>
+          <TextField
+            label="Certificate PEM"
+            fullWidth
+            multiline
+            minRows={4}
+            sx={{ mt: 1 }}
+            value={credentials?.certificatePem || ''}
+            InputProps={{ readOnly: true }}
+          />
+          <TextField
+            label="Private key PEM"
+            fullWidth
+            multiline
+            minRows={4}
+            sx={{ mt: 2 }}
+            value={credentials?.privateKeyPem || ''}
+            InputProps={{ readOnly: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCredentials(null)} data-testid="credentials-dismiss">
+            I have saved the credentials
+          </Button>
         </DialogActions>
       </Dialog>
     </PageScaffold>

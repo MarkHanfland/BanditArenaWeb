@@ -85,11 +85,54 @@ async function mockCloudApi(page) {
       return json({ media: { mediaId: 'm-new', name: body.name, description: body.description, pricePerMinute: body.pricePerMinute, version: 1 }, message: 'Content published' }, 201);
     }
     if (path === '/product-instances' && method === 'GET') {
-      return json({ instances: [{ instanceId: 'i1', status: 'online', firmwareVersion: '1.0', updateAvailable: false }] });
+      return json({
+        instances: [
+          {
+            instanceId: 'i1',
+            computeSerialNumber: 'BA-SN-001',
+            status: 'online',
+            firmwareVersion: '1.0',
+            updateAvailable: false,
+          },
+        ],
+      });
     }
-    if (path === '/product-instances' && method === 'POST') {
+    if (
+      (path === '/product-instances' || path === '/devices/provision') &&
+      method === 'POST'
+    ) {
       const body = route.request().postDataJSON();
-      return json({ instance: { instanceId: 'instance-new', model: body.model, status: 'online', firmwareVersion: '1.2.0-alpha' }, message: 'Product instance registered' }, 201);
+      if (!body.computeSerialNumber) {
+        return json({ error: 'computeSerialNumber is required (ASSY-COMPUTE unique serial)' }, 400);
+      }
+      return json(
+        {
+          instance: {
+            instanceId: 'instance-new',
+            model: body.model,
+            computeSerialNumber: body.computeSerialNumber,
+            status: 'provisioned',
+            firmwareVersion: '1.2.0-alpha',
+            certificateThumbprint: 'abc123',
+          },
+          oneTimeCredentials: {
+            certificatePem: '-----BEGIN BANDIT ALPHA DEVICE CERTIFICATE-----\nDEMO\n-----END BANDIT ALPHA DEVICE CERTIFICATE-----',
+            privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEMO\n-----END PRIVATE KEY-----',
+            certificateCn: 'bandit-device-instance-new',
+            certificateThumbprint: 'abc123',
+            certificateSource: 'alpha-ephemeral',
+          },
+          message: 'Device provisioned',
+        },
+        201,
+      );
+    }
+    if (path.match(/^\/devices\/[^/]+\/activate$/) && method === 'POST') {
+      const id = path.split('/')[2];
+      return json({
+        message: 'Device activated',
+        instance: { instanceId: id, status: 'active' },
+      });
     }
     if (path.startsWith('/updates/check')) {
       return json({ updateAvailable: true, latestVersion: '1.1', currentVersion: '1.0' });
@@ -176,8 +219,11 @@ test('fleet register flow provisions a device', async ({ page }) => {
   await page.getByTestId('menu-fleet').click();
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
   await page.getByTestId('register-device').click();
-  await page.getByRole('button', { name: 'Register' }).click();
-  await expect(page.getByText('Registered instance-new')).toBeVisible();
+  await page.getByTestId('register-compute-serial').fill('BA-COMPUTE-E2E-001');
+  await page.getByTestId('register-device-submit').click();
+  await expect(page.getByText(/Provisioned instance-new \(SN BA-COMPUTE-E2E-001\)/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'One-time device credentials' })).toBeVisible();
+  await page.getByTestId('credentials-dismiss').click();
 });
 
 test('reservation book flow confirms a slot and sends a reminder', async ({ page }) => {

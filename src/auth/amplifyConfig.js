@@ -88,18 +88,51 @@ export function buildAmplifyResourcesConfig(authCfg) {
   }
 }
 
+const DEVICE_AUTH_INFO_TIMEOUT_MS = 2000
+const DEVICE_UI_PORTS = new Set(['9724', '8080'])
+
+/** True when the console is served by the Bandit Arena device HTTP server. */
+function isDeviceServedUi() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const port = window.location.port
+  return DEVICE_UI_PORTS.has(port)
+}
+
+/**
+ * Vite (:5173) and banditarena.com use the cloud admin app client.
+ * Device-served UI (:9724/:8080) uses /auth/info (device app client).
+ */
+function preferCloudAuthConfig() {
+  if (isCloudDeployment()) {
+    return true
+  }
+  if (isDeviceServedUi()) {
+    return false
+  }
+  return isLocalWebDev()
+}
+
 async function fetchDeviceAuthInfo() {
   if (isCloudDeployment()) {
     return null
   }
 
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), DEVICE_AUTH_INFO_TIMEOUT_MS)
+
   try {
-    const res = await fetch(`${getDeviceApiBaseUrl()}/auth/info`)
+    const res = await fetch(`${getDeviceApiBaseUrl()}/auth/info`, {
+      signal: controller.signal,
+    })
     if (res.ok) {
       return res.json()
     }
   } catch (err) {
     console.warn('[Auth] Device /auth/info unavailable:', err)
+  } finally {
+    clearTimeout(timer)
   }
 
   return null
@@ -118,17 +151,19 @@ export async function resolveAuthMode() {
   }
 
   let authCfg
-  if (deviceInfo?.auth_enabled !== false && deviceInfo?.client_id) {
-    authCfg = authConfigFromDeviceInfo(deviceInfo)
-    console.info('[Auth] Device /auth/info Cognito config loaded.', {
-      cognito_domain: authCfg.cognito_domain,
-      redirect_uri: authCfg.redirect_uri,
-    })
-  } else if (isCloudDeployment() || isLocalWebDev()) {
+  if (preferCloudAuthConfig()) {
     authCfg = loadAuthConfig()
     console.info('[Auth] Cloud/local dev Cognito config loaded.', {
       cognito_domain: authCfg.cognito_domain,
       redirect_uri: authCfg.redirect_uri,
+      client_id: authCfg.client_id,
+    })
+  } else if (deviceInfo?.client_id) {
+    authCfg = authConfigFromDeviceInfo(deviceInfo)
+    console.info('[Auth] Device /auth/info Cognito config loaded.', {
+      cognito_domain: authCfg.cognito_domain,
+      redirect_uri: authCfg.redirect_uri,
+      client_id: authCfg.client_id,
     })
   } else {
     throw new Error(

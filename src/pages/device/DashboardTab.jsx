@@ -9,98 +9,89 @@ const POSITION_HISTORY_MAX_DURATION_MS = 3 * 60 * 1000 // 3 minutes in milliseco
 // Zoom-invariant UI scales (baseline sizes rendered at 100% zoom)
 const BASELINE_ICON_PX = 10
 const TREAD_HEX_SCALE = 1.5 // 25% smaller than original 2.0 — tread surface hex tile size
-const COMPASS_SCALE = 1.75
-const GRADE_SCALE = 1.75
 const USER_ICON_SCALE = 1.75
 const REFERENCE_VIEW_SIZE = 600
+/**
+ * User marker radius as a fraction of tread surface (inner) radius.
+ * ~0.095 matches the prior ~17.5px look at a 600px panel while tracking tread scale.
+ */
+const USER_MARKER_INNER_RADIUS_FRAC = 0.095
+const USER_MARKER_MIN_PX = 12
+const USER_MARKER_MAX_INNER_FRAC = 0.12
 const COMPASS_NATIVE_SIZE = 100
-const COMPASS_CENTER = COMPASS_NATIVE_SIZE / 2
-const COMPASS_VISUAL_RADIUS = 55 // ring + rotating TREAD/USER/cardinal labels
 const GRADE_NATIVE_WIDTH = 150
 const GRADE_NATIVE_HEIGHT = 92
-const GRADE_CENTER_X = GRADE_NATIVE_WIDTH / 2
-const GRADE_CENTER_Y_FROM_BOTTOM = GRADE_NATIVE_HEIGHT / 2
-const GRADE_VISUAL_RADIUS = 78 // disk + traveling grade label
-const TREAD_WALL_GAP_PX = 10
-const COMPASS_TREAD_GAP_PX = 4 // tighter clearance toward tread (more room on screen-left for labels)
+/**
+ * Clearance is against the tread *surface* (inner circle), not the outer wall.
+ * Corner widgets may overlap the dark safety-wall ring — that ring is visual
+ * padding — but must stay off the tread disk.
+ */
+const TREAD_SURFACE_GAP_PX = 6
 const TREAD_GRAPHIC_SIDE_INSET = 15 // extra margin each side around tread circle
 const TREAD_VIEW_PADDING = 40 + TREAD_GRAPHIC_SIDE_INSET
-const COMPASS_CORNER_MARGIN = 12
-const COMPASS_LABEL_MARGIN = 16 // extra clearance for rotating labels
-const COMPASS_LEFT_MARGIN = COMPASS_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET + COMPASS_LABEL_MARGIN
-const GRADE_CORNER_MARGIN = 12
-const GRADE_LABEL_MARGIN = 10
+const CORNER_MARGIN = 10
+/** Modest pad for label overflow; oversized pads were crushing visual scale. */
+const COMPASS_LABEL_PAD = 8
+const GRADE_LABEL_PAD = 6
+const COMPASS_PACK_SIZE = COMPASS_NATIVE_SIZE + COMPASS_LABEL_PAD
+const GRADE_PACK_WIDTH = GRADE_NATIVE_WIDTH + GRADE_LABEL_PAD
+const GRADE_PACK_HEIGHT = GRADE_NATIVE_HEIGHT + GRADE_LABEL_PAD
+const CORNER_FILL = 1.0
+const COMPASS_CORNER_MARGIN = CORNER_MARGIN
+const COMPASS_LEFT_MARGIN = CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
+const GRADE_CORNER_MARGIN = CORNER_MARGIN
+const GRADE_LEFT_MARGIN = CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
 
-/** Largest uniform scale where a corner widget's bounding circle clears the tread outer wall. */
-function maxCornerWidgetScale({
-  anchorX,
-  anchorY,
-  nativeCenterX,
-  nativeCenterY,
-  visualRadius,
-  labelMargin,
-  treadCenterX,
-  treadCenterY,
-  treadOuterRadius,
-  treadGap = TREAD_WALL_GAP_PX,
+/**
+ * Largest CSS scale for a W×H packing box anchored in a canvas corner such that
+ * the box stays outside the tread surface circle (plus gap).
+ *
+ * UL: box grows down/right from (marginX, marginY) — transform-origin top left
+ * LL: box grows up/right from (marginX, panelHeight - marginY) — origin bottom left
+ *
+ * Clearance is tested at the box corner nearest the tread center.
+ */
+function maxScaleForCornerBox({
+  corner,
+  panelWidth,
+  panelHeight,
+  circleCx,
+  circleCy,
+  circleR,
+  gap = TREAD_SURFACE_GAP_PX,
+  marginX,
+  marginY,
+  packWidth,
+  packHeight,
+  fill = CORNER_FILL,
 }) {
-  const minCenterDistance = treadOuterRadius + treadGap
+  const clearance = circleR + gap
+  if (packWidth <= 0 || packHeight <= 0 || clearance <= 0) {
+    return 0.5
+  }
+
+  const maxScaleByPanel = Math.min(
+    (panelWidth - marginX) / packWidth,
+    (panelHeight - marginY) / packHeight,
+  )
+
   let lo = 0
-  let hi = 4
+  let hi = Math.max(0, maxScaleByPanel)
 
   for (let i = 0; i < 48; i += 1) {
     const scale = (lo + hi) / 2
-    const widgetCenterX = anchorX + nativeCenterX * scale
-    const widgetCenterY = anchorY + nativeCenterY * scale
-    const widgetRadius = (visualRadius + labelMargin) * scale
-    const distance = Math.hypot(widgetCenterX - treadCenterX, widgetCenterY - treadCenterY)
+    const x = marginX + packWidth * scale
+    const y = corner === 'ul' ? marginY + packHeight * scale : panelHeight - marginY - packHeight * scale
+    const distance = Math.hypot(x - circleCx, y - circleCy)
 
-    if (distance >= minCenterDistance + widgetRadius) {
+    if (distance >= clearance) {
       lo = scale
     } else {
       hi = scale
     }
   }
 
-  return lo
-}
-
-function maxCompassCornerScale(treadCenterX, treadCenterY, treadOuterRadius) {
-  return maxCornerWidgetScale({
-    anchorX: COMPASS_LEFT_MARGIN,
-    anchorY: COMPASS_CORNER_MARGIN,
-    nativeCenterX: COMPASS_CENTER,
-    nativeCenterY: COMPASS_CENTER,
-    visualRadius: COMPASS_VISUAL_RADIUS,
-    labelMargin: COMPASS_LABEL_MARGIN,
-    treadCenterX,
-    treadCenterY,
-    treadOuterRadius,
-    treadGap: COMPASS_TREAD_GAP_PX,
-  })
-}
-
-function maxGradeCornerScale(panelHeight, treadCenterX, treadCenterY, treadOuterRadius) {
-  const gradeLeft = GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
-  const minCenterDistance = treadOuterRadius + TREAD_WALL_GAP_PX
-  let lo = 0
-  let hi = 4
-
-  for (let i = 0; i < 48; i += 1) {
-    const scale = (lo + hi) / 2
-    const widgetCenterX = gradeLeft + GRADE_CENTER_X * scale
-    const widgetCenterY = panelHeight - GRADE_CORNER_MARGIN - GRADE_CENTER_Y_FROM_BOTTOM * scale
-    const widgetRadius = (GRADE_VISUAL_RADIUS + GRADE_LABEL_MARGIN) * scale
-    const distance = Math.hypot(widgetCenterX - treadCenterX, widgetCenterY - treadCenterY)
-
-    if (distance >= minCenterDistance + widgetRadius) {
-      lo = scale
-    } else {
-      hi = scale
-    }
-  }
-
-  return lo
+  return Math.max(0.5, lo * fill)
 }
 
 
@@ -219,7 +210,15 @@ function SessionStat({ label, value, color }) {
 }
 
 // Compass component - shows tread and user facing direction
-function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed, scale = 1, left = COMPASS_LEFT_MARGIN, top = COMPASS_CORNER_MARGIN }) {
+function DirectionCompass({
+  treadDirection,
+  userDirection,
+  treadSpeed,
+  userSpeed,
+  scale = 1,
+  left = COMPASS_LEFT_MARGIN,
+  top = COMPASS_CORNER_MARGIN,
+}) {
   const compassSize = 100
   const center = compassSize / 2
   const outerRadius = 42
@@ -476,7 +475,13 @@ function DirectionCompass({ treadDirection, userDirection, treadSpeed, userSpeed
 //
 // The grade % label travels to the uphill rim point, correctly rotating around the full perimeter.
 // Gradient dark side = uphill, light side = downhill.
-function GradeIndicator({ rollDeg, pitchDeg, scale = 1, left = GRADE_CORNER_MARGIN, bottom = GRADE_CORNER_MARGIN }) {
+function GradeIndicator({
+  rollDeg,
+  pitchDeg,
+  scale = 1,
+  left = GRADE_LEFT_MARGIN,
+  bottom = GRADE_CORNER_MARGIN,
+}) {
   const W = 150
   const H = 92
   const cx = W / 2   // 75
@@ -880,32 +885,63 @@ function DashboardTab() {
     }
   }, [config, dimensions])
 
-  const treadUserIconSize = BASELINE_ICON_PX * USER_ICON_SCALE * uiScale
+  // Marker size tracks the tread disk (meters→px), not panel uiScale alone.
+  // uiScale previously made the icon grow/shrink with the viewer while the tread
+  // diameter mapping used a different scale, so the user looked wrong on the belt.
+  const treadUserIconSize = useMemo(() => {
+    if (!svgConfig?.innerRadius) {
+      return BASELINE_ICON_PX * USER_ICON_SCALE
+    }
+    const fromTread = svgConfig.innerRadius * USER_MARKER_INNER_RADIUS_FRAC
+    const maxPx = svgConfig.innerRadius * USER_MARKER_MAX_INNER_FRAC
+    return Math.max(USER_MARKER_MIN_PX, Math.min(fromTread, maxPx))
+  }, [svgConfig])
 
   const cornerOverlayLayout = useMemo(() => {
     if (!svgConfig) {
       return null
     }
 
-    const { centerX, centerY, outerRadius } = svgConfig
+    const { centerX, centerY, innerRadius } = svgConfig
+    const panelWidth = dimensions.width
     const panelHeight = dimensions.height
-
-    const compassScale = maxCompassCornerScale(centerX, centerY, outerRadius)
-    const gradeScale = maxGradeCornerScale(panelHeight, centerX, centerY, outerRadius)
 
     return {
       compass: {
         left: COMPASS_LEFT_MARGIN,
         top: COMPASS_CORNER_MARGIN,
-        scale: Math.max(0.35, compassScale),
+        scale: maxScaleForCornerBox({
+          corner: 'ul',
+          panelWidth,
+          panelHeight,
+          circleCx: centerX,
+          circleCy: centerY,
+          // Fit into corner + safety-wall ring; keep off tread surface.
+          circleR: innerRadius,
+          marginX: COMPASS_LEFT_MARGIN,
+          marginY: COMPASS_CORNER_MARGIN,
+          packWidth: COMPASS_PACK_SIZE,
+          packHeight: COMPASS_PACK_SIZE,
+        }),
       },
       grade: {
-        left: GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET,
+        left: GRADE_LEFT_MARGIN,
         bottom: GRADE_CORNER_MARGIN,
-        scale: Math.max(0.35, gradeScale),
+        scale: maxScaleForCornerBox({
+          corner: 'll',
+          panelWidth,
+          panelHeight,
+          circleCx: centerX,
+          circleCy: centerY,
+          circleR: innerRadius,
+          marginX: GRADE_LEFT_MARGIN,
+          marginY: GRADE_CORNER_MARGIN,
+          packWidth: GRADE_PACK_WIDTH,
+          packHeight: GRADE_PACK_HEIGHT,
+        }),
       },
     }
-  }, [svgConfig, dimensions.height])
+  }, [svgConfig, dimensions.width, dimensions.height])
 
   // Calculate user position in SVG coordinates
   const userPosition = useMemo(() => {
@@ -1503,7 +1539,7 @@ function DashboardTab() {
             userDirection={userDirectionVectorForUi}
             treadSpeed={speeds.treadSpeed}
             userSpeed={speeds.avatarSpeed}
-            scale={cornerOverlayLayout?.compass.scale ?? COMPASS_SCALE * uiScale}
+            scale={cornerOverlayLayout?.compass.scale ?? 1}
             left={cornerOverlayLayout?.compass.left ?? COMPASS_LEFT_MARGIN}
             top={cornerOverlayLayout?.compass.top ?? COMPASS_CORNER_MARGIN}
           />
@@ -1512,8 +1548,8 @@ function DashboardTab() {
           <GradeIndicator
             rollDeg={treadmillState?.treadTilt?.x || 0}
             pitchDeg={treadmillState?.treadTilt?.y || 0}
-            scale={cornerOverlayLayout?.grade.scale ?? GRADE_SCALE * uiScale}
-            left={cornerOverlayLayout?.grade.left ?? GRADE_CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET}
+            scale={cornerOverlayLayout?.grade.scale ?? 1}
+            left={cornerOverlayLayout?.grade.left ?? GRADE_LEFT_MARGIN}
             bottom={cornerOverlayLayout?.grade.bottom ?? GRADE_CORNER_MARGIN}
           />
         </Box>
