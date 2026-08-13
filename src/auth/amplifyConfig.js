@@ -1,6 +1,7 @@
 import { Amplify } from 'aws-amplify'
 import { isCloudDeployment, getDeviceApiBaseUrl, isLocalWebDev } from '../config/runtime'
 import { loadAuthConfig } from './authConfig'
+import { configureTabScopedTokenStorage } from './tokenStorage'
 
 function normalizeCognitoDomain(rawDomain) {
   if (typeof rawDomain !== 'string') {
@@ -101,7 +102,7 @@ function isDeviceServedUi() {
 }
 
 /**
- * Vite (:5173) and banditarena.com use the cloud admin app client.
+ * Vite (:5173) and console.banditarena.com use the cloud admin app client.
  * Device-served UI (:9724/:8080) uses /auth/info (device app client).
  */
 function preferCloudAuthConfig() {
@@ -176,5 +177,6 @@ export async function resolveAuthMode() {
 }
 
 export function configureAmplifyAuth(resourcesConfig) {
+  configureTabScopedTokenStorage()
   Amplify.configure(resourcesConfig)
 }

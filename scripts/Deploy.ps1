@@ -43,7 +43,7 @@ if (-not (Test-Path $syncScript)) {
     throw "Deploy helper not found: $syncScript"
 }
 
-Write-Host 'Deploying BanditArenaWeb to banditarena.com (S3 + CloudFront)...' -ForegroundColor Cyan
+Write-Host 'Deploying BanditArenaWeb console to console.banditarena.com (S3 + CloudFront)...' -ForegroundColor Cyan
 
 $syncParams = @{
     Region      = $Region

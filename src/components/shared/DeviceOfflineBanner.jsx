@@ -9,8 +9,8 @@ export default function DeviceOfflineBanner() {
         <Typography variant="body2">
           Local treadmill is offline or blocked by browser CORS. Start Bandit Arena on this
           machine and ensure the REST API is listening at {getDeviceApiBaseUrl()}. When using
-          the cloud site (banditarena.com), rebuild and restart bandit_arena.exe so CORS allows
-          the cloud origin.
+          the cloud console (console.banditarena.com), rebuild and restart bandit_arena.exe so
+          CORS allows the cloud origin.
         </Typography>
       </Alert>
     </Box>

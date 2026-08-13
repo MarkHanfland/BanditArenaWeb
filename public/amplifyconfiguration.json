@@ -13,8 +13,8 @@
   "oauth": {
     "domain": "bandit-administrator-test.auth.us-east-1.amazoncognito.com",
     "scope": ["openid", "profile", "email"],
-    "redirectSignIn": "https://banditarena.com/auth/callback",
-    "redirectSignOut": "https://banditarena.com/",
+    "redirectSignIn": "https://console.banditarena.com/auth/callback",
+    "redirectSignOut": "https://console.banditarena.com/",
     "responseType": "code"
   },
   "aws_cognito_username_attributes": [],

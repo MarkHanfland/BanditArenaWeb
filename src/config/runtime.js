@@ -1,4 +1,4 @@
-const CLOUD_HOSTS = new Set(['banditarena.com', 'www.banditarena.com'])
+const CLOUD_HOSTS = new Set(['console.banditarena.com'])
 const LOCAL_DEV_HOSTS = new Set(['localhost', '127.0.0.1'])
 
 export function isCloudDeployment() {
@@ -8,10 +8,14 @@ export function isCloudDeployment() {
   if (import.meta.env.VITE_APP_MODE === 'device') {
     return false
   }
-  if (typeof window === 'undefined') {
-    return false
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('e2eCloudConsole') === 'true') {
+      return true
+    }
+    return CLOUD_HOSTS.has(window.location.hostname)
   }
-  return CLOUD_HOSTS.has(window.location.hostname)
+  return false
 }
 
 /** True when running the Vite dev server (BanditArenaWeb Start Local). */

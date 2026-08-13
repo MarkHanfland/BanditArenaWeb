@@ -1,4 +1,4 @@
-name: Deploy Bandit Arena Website
+name: Deploy Bandit Arena Console
 
 on:
   push:
@@ -17,8 +17,7 @@ env:
   NODE_VERSION: '20'
   AWS_REGION: us-east-1
   AWS_DEPLOY_ROLE_ARN: arn:aws:iam::598442446265:role/bandit-arena-website-deploy-prod
-  S3_BUCKET: bandit-arena-website-prod-598442446265
-  CLOUDFRONT_DISTRIBUTION_ID: E8AMKL5WYZ3G1
+  STACK_NAME: bandit-arena-website-prod
 
 jobs:
   build-and-deploy:
@@ -45,11 +44,19 @@ jobs:
           role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Resolve stack outputs
+        id: stack
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='WebsiteBucketName'].OutputValue" --output text)
+          DIST=$(aws cloudformation describe-stacks --stack-name "${{ env.STACK_NAME }}" --query "Stacks[0].Outputs[?OutputKey=='ConsoleDistributionId'].OutputValue" --output text)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "distribution=$DIST" >> "$GITHUB_OUTPUT"
+
       - name: Sync to S3
-        run: aws s3 sync ./dist s3://${{ env.S3_BUCKET }} --delete
+        run: aws s3 sync ./dist "s3://${{ steps.stack.outputs.bucket }}" --delete
 
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
-            --distribution-id "${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --distribution-id "${{ steps.stack.outputs.distribution }}" \
             --paths "/*"

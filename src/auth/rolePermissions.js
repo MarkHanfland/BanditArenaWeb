@@ -6,7 +6,7 @@ export const ROLE_TECHNICIAN = 'technician'
 export const ROLE_VENUE_ADMIN = 'venue-admin'
 
 const DEVICE_MENU_IDS = ['dashboard', 'user', 'treadmill', 'services', 'events', 'config']
-const CLOUD_MENU_IDS = ['content', 'users', 'reservations', 'billing', 'usage', 'fleet', 'maintenance']
+const CLOUD_MENU_IDS = ['content', 'users', 'reservations', 'staff', 'billing', 'usage', 'fleet', 'maintenance']
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'user', 'treadmill', 'events'],
@@ -64,7 +64,7 @@ export function getAllowedMenuIds(user) {
   const role = deriveUserRole(user)
   const ids = [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[ROLE_OPERATOR])]
 
-  // banditarena.com is the unified cloud console — show cloud navigation for all signed-in users.
+  // console.banditarena.com is the unified cloud console — show cloud navigation for all signed-in users.
   if (isCloudDeployment()) {
     for (const cloudId of CLOUD_MENU_IDS) {
       if (!ids.includes(cloudId)) {
