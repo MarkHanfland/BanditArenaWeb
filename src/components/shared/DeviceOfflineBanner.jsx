@@ -1,34 +1,25 @@
 import React from 'react'
 import { Alert, Box, Typography } from '@mui/material'
-import { getDeviceApiBaseUrl } from '../../config/runtime'
 
-export default function DeviceOfflineBanner() {
+/**
+ * Quiet main-panel copy when a Local Device route is somehow still active while
+ * offline. Header errors / warning banners are intentionally not used.
+ */
+export function DeviceOfflinePanel({ title = 'Local device offline' }) {
   return (
-    <Box sx={{ px: 2, pt: 2 }}>
-      <Alert severity="warning">
-        <Typography variant="body2">
-          Local treadmill is offline or blocked by browser CORS. Start Bandit Arena on this
-          machine and ensure the REST API is listening at {getDeviceApiBaseUrl()}. When using
-          the cloud console (console.banditarena.com), rebuild and restart bandit_arena.exe so
-          CORS allows the cloud origin.
-        </Typography>
-      </Alert>
-    </Box>
-  )
-}
-
-export function DeviceOfflinePanel({ title = 'Device unavailable' }) {
-  return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 3 }} data-testid="local-device-offline-panel">
       <Alert severity="info">
         <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
           {title}
         </Typography>
         <Typography variant="body2">
-          Connect to a local Bandit Arena instance to view live treadmill data. Cloud management
-          pages remain available in the sidebar.
+          Connect to a local Bandit Arena instance to use Local Device pages. Cloud
+          management remains available in the sidebar. Availability is rechecked
+          every 5 seconds.
         </Typography>
       </Alert>
     </Box>
   )
 }
+
+export default DeviceOfflinePanel

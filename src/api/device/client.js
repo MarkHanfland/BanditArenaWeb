@@ -53,3 +53,12 @@ deviceApi.interceptors.response.use(
 )
 
 export default deviceApi
+
+export async function getAuthInfo() {
+  try {
+    const response = await axios.get(`${getDeviceApiBaseUrl()}/auth/info`, { timeout: 2000 })
+    return { data: response.data, error: null }
+  } catch (err) {
+    return { data: null, error: err.message || 'Device auth info unavailable' }
+  }
+}

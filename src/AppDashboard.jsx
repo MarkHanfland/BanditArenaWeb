@@ -25,6 +25,8 @@ import PlayCircleFilledWhiteIcon from '@mui/icons-material/PlayCircleFilledWhite
 import CloudQueueIcon from '@mui/icons-material/CloudQueue'
 import GroupIcon from '@mui/icons-material/Group'
 import PaymentsIcon from '@mui/icons-material/Payments'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import BusinessIcon from '@mui/icons-material/Business'
 import InsightsIcon from '@mui/icons-material/Insights'
 import HubIcon from '@mui/icons-material/Hub'
 import BuildIcon from '@mui/icons-material/Build'
@@ -37,9 +39,11 @@ import TreadmillTab from './pages/device/TreadmillTab'
 import ServicesTab from './pages/device/ServicesTab'
 import EventsTab from './pages/device/EventsTab'
 import ConfigurationTab from './pages/device/ConfigurationTab'
-import ContentPage from './pages/cloud/ContentPage'
+import MediaPage from './pages/cloud/MediaPage'
 import UsersPage from './pages/cloud/UsersPage'
 import BillingPage from './pages/cloud/BillingPage'
+import StaffPage from './pages/cloud/StaffPage'
+import OrganizationsPage from './pages/cloud/OrganizationsPage'
 import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
 import MaintenancePage from './pages/cloud/MaintenancePage'
@@ -47,8 +51,11 @@ import ReservationsPage from './pages/cloud/ReservationsPage'
 
 import { useAuth } from './auth/useAuth'
 import { filterMenuGroups } from './auth/rolePermissions'
-import DeviceOfflineBanner, { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
+import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
+import DeviceStatusBand from './components/shared/DeviceStatusBand'
+import { PlayerSessionProvider, SESSION_PHASE, usePlayerSession } from './session/PlayerSessionContext'
+import { isCloudDeployment } from './config/runtime'
 import {
   setAuthToken,
   clearAuthToken,
@@ -57,8 +64,9 @@ import {
   getTelemetryCurrent,
   triggerSafetyStop,
   triggerSafetyStart,
+  getAuthInfo,
 } from './api/device'
-import { setCloudAuthToken, clearCloudAuthToken } from './api/cloud'
+import { setCloudAuthToken, clearCloudAuthToken, setCloudTenantId } from './api/cloud'
 
 const DEVICE_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, panel: (props) => <DashboardTab {...props} /> },
@@ -70,9 +78,11 @@ const DEVICE_ITEMS = [
 ]
 
 const CLOUD_ITEMS = [
-  { id: 'content', label: 'Content', icon: <MovieIcon />, panel: () => <ContentPage /> },
+  { id: 'media', label: 'Media', icon: <MovieIcon />, panel: () => <MediaPage /> },
   { id: 'users', label: 'Enrollment', icon: <GroupIcon />, panel: () => <UsersPage /> },
   { id: 'reservations', label: 'Reservations', icon: <EventIcon />, panel: () => <ReservationsPage /> },
+  { id: 'staff', label: 'Staff', icon: <ManageAccountsIcon />, panel: () => <StaffPage /> },
+  { id: 'organizations', label: 'Organizations', icon: <BusinessIcon />, panel: () => <OrganizationsPage /> },
   { id: 'billing', label: 'Billing', icon: <PaymentsIcon />, panel: () => <BillingPage /> },
   { id: 'usage', label: 'Analytics', icon: <InsightsIcon />, panel: () => <UsagePage /> },
   { id: 'fleet', label: 'Fleet', icon: <HubIcon />, panel: () => <FleetPage /> },
@@ -80,7 +90,7 @@ const CLOUD_ITEMS = [
 ]
 
 const MENU_GROUPS = [
-  { id: 'local', label: 'Local Device', items: DEVICE_ITEMS },
+  { id: 'local', label: 'Local Treadmill Device', items: DEVICE_ITEMS },
   { id: 'cloud', label: 'Cloud Management', items: CLOUD_ITEMS },
 ]
 
@@ -107,9 +117,18 @@ function TabPanel({ children, isActive, noPadding = false, scrollable = false })
 }
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState('dashboard')
-  const { accessToken, cloudAuthToken, user, logout, refreshAccessToken, login } = useAuth()
   const deviceOnline = useDeviceOnline()
+  return (
+    <PlayerSessionProvider deviceOnline={deviceOnline === true}>
+      <DashboardView deviceOnline={deviceOnline} />
+    </PlayerSessionProvider>
+  )
+}
+
+function DashboardView({ deviceOnline }) {
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const { accessToken, cloudAuthToken, idToken, user, logout, refreshAccessToken, login } = useAuth()
+  const { phase, sessionActive } = usePlayerSession()
   const [treadmillState, setTreadmillState] = useState(null)
   const [safetyActionBusy, setSafetyActionBusy] = useState(false)
   const [safetyStopLatched, setSafetyStopLatched] = useState(false)
@@ -132,9 +151,23 @@ export default function Dashboard() {
     }
   }, [allItems, activeTab])
 
+  // When the local unit is offline, leave Local Device routes and land on cloud.
+  useEffect(() => {
+    if (deviceOnline !== false || !isDeviceTab) {
+      return
+    }
+    const cloudFirst = visibleMenuGroups.find((group) => group.id === 'cloud')?.items?.[0]
+    if (cloudFirst) {
+      setActiveTab(cloudFirst.id)
+    }
+  }, [deviceOnline, isDeviceTab, visibleMenuGroups])
+
   const isSafetyStopState = treadmillState === 3
   const isOperatingState = treadmillState === 2
-  const showSafetyStart = safetyStopLatched || isSafetyStopState
+  // Safety Start is only a resume after e-stop during an active player session.
+  // USER_STANDBY uses the player Start control; offering Safety Start here leaves
+  // the button stuck on "Starting..." because the belt never enters OPERATING.
+  const showSafetyStart = sessionActive && (safetyStopLatched || isSafetyStopState)
   const isSafetyControlBusy = safetyActionBusy || safetyActionPending !== null
   const canSafetyStop = !isSafetyControlBusy && isOperatingState && deviceOnline
   const canSafetyStart = !isSafetyControlBusy && showSafetyStart && deviceOnline
@@ -148,6 +181,25 @@ export default function Dashboard() {
       clearCloudAuthToken()
     }
   }, [accessToken, cloudAuthToken])
+
+  useEffect(() => {
+    if (isCloudDeployment()) {
+      // Prefer JWT custom:tenantId; Alpha staff tokens often omit it → demo tenant.
+      const fromToken = readTenantIdFromJwt(idToken || cloudAuthToken)
+      setCloudTenantId(fromToken || 'tenant-demo-001')
+      return undefined
+    }
+
+    let cancelled = false
+    getAuthInfo().then(({ data }) => {
+      if (!cancelled && data?.tenantId) {
+        setCloudTenantId(data.tenantId)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [idToken, cloudAuthToken])
 
   useEffect(() => {
     setRefreshCallback(refreshAccessToken)
@@ -176,6 +228,10 @@ export default function Dashboard() {
         if (safetyActionPending === 'stop') setSafetyActionPending(null)
       }
       if (state === 2) {
+        setSafetyStopLatched(false)
+        if (safetyActionPending === 'start') setSafetyActionPending(null)
+      }
+      if (state === 5 || state === 0) {
         setSafetyStopLatched(false)
         if (safetyActionPending === 'start') setSafetyActionPending(null)
       }
@@ -226,13 +282,27 @@ export default function Dashboard() {
     safetyButtonLabel = 'Starting...'
   }
 
+  const userTabEnabled = phase !== SESSION_PHASE.idle
+  const userTabSecondary =
+    phase === SESSION_PHASE.pending
+      ? 'pending start'
+      : phase === SESSION_PHASE.active
+        ? 'active session'
+        : 'no session'
+
+  useEffect(() => {
+    if (activeTab === 'user' && phase === SESSION_PHASE.idle) {
+      setActiveTab('dashboard')
+    }
+  }, [activeTab, phase])
+
   const handleSafetyAction = showSafetyStart ? handleSafetyStart : handleSafetyStop
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <AppBar position="static" elevation={0}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <AppBar position="static" elevation={0} sx={{ flexShrink: 0 }}>
         <Toolbar>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
             <img src="/BanditLogo.svg" alt="Bandit Logo" style={{ height: '48px', width: 'auto' }} />
             <Typography
               variant="h4"
@@ -242,11 +312,22 @@ export default function Dashboard() {
                 fontFamily: '"Montserrat", sans-serif',
                 letterSpacing: '1px',
                 textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
+                whiteSpace: 'nowrap',
               }}
             >
               BANDIT ARENA
             </Typography>
             <Chip icon={<CloudQueueIcon />} size="small" label="Unified Console" variant="outlined" />
+            {deviceOnline === false && (
+              <Chip
+                size="small"
+                color="default"
+                variant="outlined"
+                label="Local offline"
+                data-testid="header-local-offline"
+                sx={{ opacity: 0.9 }}
+              />
+            )}
           </Box>
           {user && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -257,6 +338,7 @@ export default function Dashboard() {
                 startIcon={isSafetyControlBusy ? <CircularProgress size={14} color="inherit" /> : safetyButtonIcon}
                 onClick={handleSafetyAction}
                 disabled={safetyButtonDisabled}
+                data-testid="safety-control"
                 sx={{ borderRadius: 999, px: 1.5, fontWeight: 700 }}
               >
                 {safetyButtonLabel}
@@ -278,9 +360,9 @@ export default function Dashboard() {
         </Toolbar>
       </AppBar>
 
-      {deviceOnline === false && isDeviceTab && <DeviceOfflineBanner />}
+      <DeviceStatusBand deviceOnline={deviceOnline === true} />
 
-      <Box sx={{ display: 'flex', flexGrow: 1 }}>
+      <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Box
           sx={{
             borderRight: 1,
@@ -290,47 +372,73 @@ export default function Dashboard() {
             overflowY: 'auto',
           }}
         >
-          {visibleMenuGroups.map((group, groupIndex) => (
-            <Box key={group.id}>
-              <Typography
-                variant="overline"
+          {visibleMenuGroups.map((group, groupIndex) => {
+            const localOffline = group.id === 'local' && deviceOnline === false
+            const items = localOffline ? [] : group.items
+            return (
+            <Box key={group.id} data-testid={group.id === 'local' ? 'menu-group-local' : `menu-group-${group.id}`}>
+              <Box
                 sx={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
                   px: 2,
                   pt: groupIndex === 0 ? 2 : 1,
                   pb: 1,
-                  color: 'text.secondary',
-                  letterSpacing: 1,
-                  fontWeight: 700,
                 }}
               >
-                {group.label}
-              </Typography>
+                <Typography
+                  variant="overline"
+                  sx={{
+                    color: 'text.secondary',
+                    letterSpacing: 1,
+                    fontWeight: 700,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {group.label}
+                </Typography>
+                {localOffline && (
+                  <Chip
+                    size="small"
+                    label="Offline"
+                    data-testid="menu-local-offline"
+                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  />
+                )}
+              </Box>
+              {items.length > 0 && (
               <List dense sx={{ pt: 0 }}>
-                {group.items.map((item) => (
-                  <ListItemButton
-                    key={item.id}
-                    selected={activeTab === item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    sx={{ mx: 1, borderRadius: 1 }}
-                    data-testid={`menu-${item.id}`}
-                  >
-                    <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-                    <ListItemText
-                      primary={item.label}
-                      secondary={
-                        group.id === 'local' && deviceOnline === false ? 'offline' : undefined
-                      }
-                    />
-                  </ListItemButton>
-                ))}
+                {items.map((item) => {
+                  const isUserTab = item.id === 'user'
+                  const disabled = isUserTab && !userTabEnabled
+                  let secondary
+                  if (isUserTab) {
+                    secondary = userTabSecondary
+                  }
+                  return (
+                    <ListItemButton
+                      key={item.id}
+                      selected={activeTab === item.id}
+                      disabled={disabled}
+                      onClick={() => setActiveTab(item.id)}
+                      sx={{ mx: 1, borderRadius: 1 }}
+                      data-testid={`menu-${item.id}`}
+                    >
+                      <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
+                      <ListItemText primary={item.label} secondary={secondary} />
+                    </ListItemButton>
+                  )
+                })}
               </List>
+              )}
               {groupIndex < visibleMenuGroups.length - 1 && <Divider sx={{ mt: 1 }} />}
             </Box>
-          ))}
+            )
+          })}
         </Box>
 
-        <Box sx={{ flexGrow: 1, py: 0, height: 'calc(100vh - 64px - 56px)', overflow: 'hidden' }}>
+        <Box sx={{ flexGrow: 1, py: 0, minHeight: 0, overflow: 'hidden' }}>
           <TabPanel
             isActive
             noPadding={activeItem?.id === 'dashboard'}
@@ -350,7 +458,7 @@ export default function Dashboard() {
         sx={{
           py: 2,
           px: 2,
-          mt: 'auto',
+          flexShrink: 0,
           backgroundColor: 'background.paper',
           borderTop: 1,
           borderColor: 'divider',
@@ -362,4 +470,19 @@ export default function Dashboard() {
       </Box>
     </Box>
   )
+}
+
+function readTenantIdFromJwt(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) {
+    return null
+  }
+  try {
+    const [, payloadB64] = token.split('.')
+    const json = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))
+    const payload = JSON.parse(json)
+    const tenantId = payload['custom:tenantId'] || payload['custom:tenant_id'] || payload.tenantId
+    return typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : null
+  } catch {
+    return null
+  }
 }

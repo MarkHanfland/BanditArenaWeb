@@ -3,12 +3,14 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Stack,
   Table,
   TableBody,
@@ -27,28 +29,65 @@ import {
   getUser,
   listUserSessions,
   listUsers,
+  listVenues,
+  updateEnrollmentState,
 } from '../../api/cloud'
+import { isCloudDeployment } from '../../config/runtime'
+import { usePlayerSession } from '../../session/PlayerSessionContext'
+
+const ENROLLMENT_ACTIONS = {
+  pending: [
+    { next: 'active', label: 'Activate' },
+    { next: 'revoked', label: 'Revoke' },
+  ],
+  active: [
+    { next: 'suspended', label: 'Suspend' },
+    { next: 'revoked', label: 'Revoke' },
+  ],
+  suspended: [
+    { next: 'active', label: 'Activate' },
+    { next: 'revoked', label: 'Revoke' },
+  ],
+  revoked: [],
+}
+
+function enrollmentChipColor(state) {
+  if (state === 'active') return 'success'
+  if (state === 'pending') return 'warning'
+  if (state === 'revoked') return 'error'
+  return 'default'
+}
 
 export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tenant, setTenant] = useState(null)
+  const [venues, setVenues] = useState([])
   const [users, setUsers] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
   const [sessions, setSessions] = useState([])
   const [addOpen, setAddOpen] = useState(false)
   const [newUser, setNewUser] = useState({ name: '', email: '' })
+  const [ageAttested, setAgeAttested] = useState(false)
   const [actionMessage, setActionMessage] = useState('')
+  const [busyUserId, setBusyUserId] = useState('')
+  const onDevice = !isCloudDeployment()
+  const { startForPlayer } = usePlayerSession()
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [tenantRes, usersRes] = await Promise.all([getTenantMe(), listUsers()])
+    const [tenantRes, usersRes, venuesRes] = await Promise.all([
+      getTenantMe(),
+      listUsers(),
+      listVenues(),
+    ])
     if (tenantRes.error || usersRes.error) {
       setError(tenantRes.error || usersRes.error)
     } else {
       setTenant(tenantRes.data?.tenant)
       setUsers(usersRes.data?.users || [])
+      setVenues(venuesRes.data?.venues || [])
     }
     setLoading(false)
   }, [])
@@ -71,19 +110,66 @@ export default function UsersPage() {
 
   const handleAddUser = async () => {
     setActionMessage('')
-    const { data, error: apiError } = await createUser(newUser)
+    const { data, error: apiError } = await createUser({
+      ...newUser,
+      ageAttested,
+    })
     if (apiError) {
       setActionMessage(apiError)
       return
     }
     setAddOpen(false)
     setNewUser({ name: '', email: '' })
+    setAgeAttested(false)
     setActionMessage(`Created ${data?.user?.name}`)
     await loadUsers()
   }
 
+  const handleEnrollment = async (user, nextState) => {
+    if (nextState === 'revoked') {
+      const confirmed = window.confirm(`Revoke enrollment for ${user.name}? This cannot be undone.`)
+      if (!confirmed) {
+        return
+      }
+    }
+    setActionMessage('')
+    setBusyUserId(user.userId)
+    const { data, error: apiError } = await updateEnrollmentState(user.userId, {
+      enrollmentState: nextState,
+    })
+    setBusyUserId('')
+    if (apiError) {
+      setActionMessage(apiError)
+      return
+    }
+    const toState = data?.user?.enrollmentState || nextState
+    setActionMessage(`${user.name} is now ${toState}`)
+    await loadUsers()
+    if (selectedUser?.userId === user.userId) {
+      setSelectedUser(data?.user || { ...selectedUser, enrollmentState: toState })
+    }
+  }
+
   const handleStartSession = async (userId) => {
     setActionMessage('')
+    const user = users.find((entry) => entry.userId === userId)
+    if (user && user.enrollmentState !== 'active') {
+      setActionMessage('Session blocked: enrollment not active')
+      return
+    }
+    if (onDevice) {
+      const started = await startForPlayer({
+        userId,
+        displayName: user?.name || userId,
+        ageAttested: Boolean(user?.ageAttested),
+      })
+      if (!started) {
+        setActionMessage('Device session start failed. Use the header player Start after selecting an enrolled player.')
+        return
+      }
+      setActionMessage(`Device session started for ${user?.name || userId}`)
+      return
+    }
     const entitlement = await checkEntitlement({ userId, action: 'session_start' })
     if (entitlement.error || !entitlement.data?.allowed) {
       setActionMessage(entitlement.error || 'Session blocked: enrollment not active')
@@ -94,7 +180,7 @@ export default function UsersPage() {
       setActionMessage(sessionRes.error)
       return
     }
-    setActionMessage(`Session ${sessionRes.data?.session?.sessionId} started`)
+    setActionMessage(`Cloud session record ${sessionRes.data?.session?.sessionId} created. This does not start the treadmill.`)
     if (selectedUser?.userId === userId) {
       const sessionsRes = await listUserSessions(userId)
       setSessions(sessionsRes.data?.sessions || [])
@@ -105,16 +191,21 @@ export default function UsersPage() {
     <PageScaffold
       title="User Profile & Enrollment"
       category="Cloud"
-      description="Enrollment state, safety profiles, and session access for venue users (SVC-004)."
+      description={onDevice
+        ? "Enroll players here. Start a run from the header: pick a player and Start. Age 8+ is attested when the account is created."
+        : "Enrollment state, safety profiles, and cloud session records. Creating a cloud session does not start the treadmill."}
     >
       {tenant && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Tenant: {tenant.name} · Venue: {tenant.venueName}
+          Operator: {tenant.name}
+          {venues.length > 0
+            ? ` · Venues: ${venues.map((v) => v.name || v.venueId).join(', ')}`
+            : ''}
         </Typography>
       )}
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
-      {actionMessage && <Alert severity="info" sx={{ mb: 2 }}>{actionMessage}</Alert>}
+      {actionMessage && <Alert severity="info" sx={{ mb: 2 }} data-testid="enrollment-message">{actionMessage}</Alert>}
       {!loading && !error && (
         <Stack spacing={2}>
           <Box>
@@ -137,11 +228,33 @@ export default function UsersPage() {
                   <TableCell>{user.name}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <Chip size="small" label={user.enrollmentState} color={user.enrollmentState === 'active' ? 'success' : 'default'} />
+                    <Chip
+                      size="small"
+                      label={user.enrollmentState}
+                      color={enrollmentChipColor(user.enrollmentState)}
+                    />
                   </TableCell>
                   <TableCell align="right">
                     <Button size="small" onClick={() => openUserDetail(user.userId)}>Details</Button>
-                    <Button size="small" onClick={() => handleStartSession(user.userId)}>Start Session</Button>
+                    {(ENROLLMENT_ACTIONS[user.enrollmentState] || []).map((action) => (
+                      <Button
+                        key={action.next}
+                        size="small"
+                        color={action.next === 'revoked' ? 'error' : 'primary'}
+                        disabled={busyUserId === user.userId}
+                        onClick={() => handleEnrollment(user, action.next)}
+                        data-testid={`${action.next === 'active' ? 'activate' : action.next === 'suspended' ? 'suspend' : 'revoke'}-${user.userId}`}
+                      >
+                        {action.label}
+                      </Button>
+                    ))}
+                    <Button
+                      size="small"
+                      onClick={() => handleStartSession(user.userId)}
+                      data-testid={`start-session-${user.userId}`}
+                    >
+                      Start Session
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -175,13 +288,42 @@ export default function UsersPage() {
         <DialogTitle>Add User</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label="Name" fullWidth value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-            <TextField label="Email" fullWidth value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+            <TextField
+              label="Name"
+              fullWidth
+              value={newUser.name}
+              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+              inputProps={{ 'data-testid': 'add-user-name' }}
+            />
+            <TextField
+              label="Email"
+              fullWidth
+              value={newUser.email}
+              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+              inputProps={{ 'data-testid': 'add-user-email' }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={ageAttested}
+                  onChange={(e) => setAgeAttested(e.target.checked)}
+                  inputProps={{ 'data-testid': 'add-user-age' }}
+                />
+              }
+              label="Player is age 8 or older"
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddUser}>Create</Button>
+          <Button
+            variant="contained"
+            onClick={handleAddUser}
+            disabled={!newUser.name.trim() || !ageAttested}
+            data-testid="add-user-submit"
+          >
+            Create
+          </Button>
         </DialogActions>
       </Dialog>
     </PageScaffold>

@@ -49,7 +49,7 @@ export default function UsagePage() {
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="overline" color="text.secondary">Sessions (7d)</Typography>
-                  <Typography variant="h4">{summary.sessionsCompleted}</Typography>
+                  <Typography variant="h4" data-testid="analytics-sessions">{summary.sessionsCompleted}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -72,10 +72,13 @@ export default function UsagePage() {
           </Grid>
           <Box>
             <Typography variant="subtitle2" gutterBottom>Weekly session trend</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" data-testid="analytics-trend">
               {(summary.weeklySessionTrend || []).join(' → ')}
             </Typography>
           </Box>
+          {(summary.alerts || []).length === 0 && (
+            <Typography variant="body2" color="text.secondary">No open alerts.</Typography>
+          )}
           {(summary.alerts || []).map((alert) => (
             <Alert key={alert.id} severity={alert.severity === 'info' ? 'info' : 'warning'}>
               {alert.message}

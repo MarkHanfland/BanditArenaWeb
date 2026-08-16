@@ -86,3 +86,60 @@ export async function pingDevice() {
     return false
   }
 }
+
+export async function getCurrentSession() {
+  try {
+    const response = await deviceApi.get('/session/current')
+    return { data: response.data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error.response?.data?.error || error.message,
+    }
+  }
+}
+
+export async function startSession({
+  userId,
+  displayName,
+  ageAttested,
+  mediaId,
+  testMedia = false,
+  simulationMode = '',
+  deterministicConfig = '',
+}) {
+  try {
+    const response = await deviceApi.post(
+      '/session/start',
+      {
+        userId,
+        displayName,
+        ageAttested,
+        mediaId,
+        testMedia: Boolean(testMedia),
+        simulationMode: simulationMode || '',
+        deterministicConfig: deterministicConfig || '',
+      },
+      // Test-media sessions start CameraSimulator then wait for tracking (can exceed default 5s).
+      { timeout: 35000 },
+    )
+    return { data: response.data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error.response?.data?.error || error.message,
+    }
+  }
+}
+
+export async function endSession() {
+  try {
+    const response = await deviceApi.post('/session/end')
+    return { data: response.data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error.response?.data?.error || error.message,
+    }
+  }
+}

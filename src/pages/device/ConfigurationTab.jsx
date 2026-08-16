@@ -524,6 +524,7 @@ function ConfigurationTab({ treadmillState = null }) {
             onClick={handleSaveClick}
             disabled={!hasChanges || saving || isSaveBlocked}
             color="primary"
+            data-testid="config-save"
           >
             Save Changes
           </Button>

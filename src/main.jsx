@@ -87,7 +87,7 @@ const darkTheme = createTheme({
     error: { main: '#e05555', light: '#ff8a80', dark: '#b33030' },
     warning: { main: '#c9a857', light: '#e0c87a', dark: '#a08840' },
     info: { main: '#5eb8cf', light: '#8ed0e2', dark: '#3a95ab' },
-    success: { main: '#4caf50', light: '#80e27e', dark: '#357a38' },
+    success: { main: '#00d4aa', light: '#33e0bb', dark: '#00a884', contrastText: '#0a0c0e' },
     background: { default: '#181c20', paper: '#23272b' },
     text: { primary: '#e0e0e0', secondary: '#b0bec5', disabled: '#7b8a97' },
     divider: 'rgba(224, 224, 224, 0.12)',

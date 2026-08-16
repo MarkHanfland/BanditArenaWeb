@@ -4,9 +4,14 @@ import { isCloudDeployment } from '../config/runtime'
 export const ROLE_OPERATOR = 'operator'
 export const ROLE_TECHNICIAN = 'technician'
 export const ROLE_VENUE_ADMIN = 'venue-admin'
+export const ROLE_FLEET_ADMIN = 'fleet-admin'
+export const ROLE_CLOUD_ADMIN = 'cloud-admin'
 
 const DEVICE_MENU_IDS = ['dashboard', 'user', 'treadmill', 'services', 'events', 'config']
-const CLOUD_MENU_IDS = ['content', 'users', 'reservations', 'staff', 'billing', 'usage', 'fleet', 'maintenance']
+
+/** Menus for purchase / install / operate lifecycle by Cognito role. */
+const ORG_AND_FLEET = ['organizations', 'fleet', 'staff', 'maintenance']
+const VENUE_OPS = ['media', 'users', 'reservations', 'usage', ...ORG_AND_FLEET]
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'user', 'treadmill', 'events'],
@@ -17,11 +22,13 @@ export const ROLE_PERMISSIONS = {
     'services',
     'events',
     'config',
-    'content',
+    'media',
     'usage',
     'maintenance',
   ],
-  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...CLOUD_MENU_IDS],
+  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
+  [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS, 'billing'],
+  [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS, 'billing'],
 }
 
 export function extractGroupsFromUser(user) {
@@ -43,12 +50,13 @@ export function extractGroupsFromUser(user) {
 
 export function deriveUserRole(user) {
   const groups = extractGroupsFromUser(user)
-  if (
-    groups.includes('bandit-venue-admin') ||
-    groups.includes('bandit-cloud-admin') ||
-    groups.includes('bandit-fleet-admin') ||
-    groups.includes('bandit-developer')
-  ) {
+  if (groups.includes('bandit-cloud-admin')) {
+    return ROLE_CLOUD_ADMIN
+  }
+  if (groups.includes('bandit-fleet-admin')) {
+    return ROLE_FLEET_ADMIN
+  }
+  if (groups.includes('bandit-venue-admin') || groups.includes('bandit-developer')) {
     return ROLE_VENUE_ADMIN
   }
   if (groups.includes('bandit-technician')) {
@@ -57,23 +65,16 @@ export function deriveUserRole(user) {
   if (groups.includes('bandit-operator')) {
     return ROLE_OPERATOR
   }
+  // Cloud console without groups: treat as venue admin for Alpha lab access.
+  if (isCloudDeployment()) {
+    return ROLE_VENUE_ADMIN
+  }
   return ROLE_OPERATOR
 }
 
 export function getAllowedMenuIds(user) {
   const role = deriveUserRole(user)
-  const ids = [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[ROLE_OPERATOR])]
-
-  // console.banditarena.com is the unified cloud console — show cloud navigation for all signed-in users.
-  if (isCloudDeployment()) {
-    for (const cloudId of CLOUD_MENU_IDS) {
-      if (!ids.includes(cloudId)) {
-        ids.push(cloudId)
-      }
-    }
-  }
-
-  return ids
+  return [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[ROLE_OPERATOR])]
 }
 
 export function filterMenuGroups(menuGroups, user) {

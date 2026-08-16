@@ -17,6 +17,7 @@ const cloudApi = axios.create({
 
 
 let _authToken = null
+let _tenantId = null
 
 
 
@@ -31,6 +32,24 @@ export function setCloudAuthToken(token) {
   } else {
 
     delete cloudApi.defaults.headers.common.Authorization
+
+  }
+
+}
+
+
+
+export function setCloudTenantId(tenantId) {
+
+  _tenantId = tenantId || null
+
+  if (_tenantId) {
+
+    cloudApi.defaults.headers.common['X-Bandit-Tenant-Id'] = _tenantId
+
+  } else {
+
+    delete cloudApi.defaults.headers.common['X-Bandit-Tenant-Id']
 
   }
 
@@ -57,6 +76,12 @@ cloudApi.interceptors.request.use((config) => {
   } else if (isE2eAuthBypass()) {
 
     delete config.headers.Authorization
+
+  }
+
+  if (_tenantId) {
+
+    config.headers['X-Bandit-Tenant-Id'] = _tenantId
 
   }
 
@@ -153,6 +178,46 @@ export async function listMedia() {
 export async function publishMedia(payload) {
 
   return request(() => cloudApi.post('/media', payload))
+
+}
+
+
+
+export async function updateMedia(mediaId, payload) {
+
+  return request(() => cloudApi.patch(`/media/${mediaId}`, payload))
+
+}
+
+
+
+export async function deleteMedia(mediaId) {
+
+  return request(() => cloudApi.delete(`/media/${mediaId}`))
+
+}
+
+
+
+export async function unpublishMedia(mediaId) {
+
+  return request(() => cloudApi.post(`/media/${mediaId}/unpublish`))
+
+}
+
+
+
+export async function republishMedia(mediaId, payload = {}) {
+
+  return request(() => cloudApi.post(`/media/${mediaId}/publish`, payload))
+
+}
+
+
+
+export async function createMediaAssetUploadToken(mediaId, payload) {
+
+  return request(() => cloudApi.post(`/media/${mediaId}/asset-upload-token`, payload))
 
 }
 
@@ -353,6 +418,150 @@ export async function sendNotification(payload) {
 export async function getAnalyticsSummary() {
 
   return request(() => cloudApi.get('/analytics/summary'))
+
+}
+
+
+
+export async function updateEnrollmentState(userId, payload) {
+
+  return request(() => cloudApi.patch(`/users/${userId}/enrollment`, payload))
+
+}
+
+
+
+export async function listVenues() {
+
+  return request(() => cloudApi.get('/venues'))
+
+}
+
+
+
+export async function createVenue(payload) {
+
+  return request(() => cloudApi.post('/venues', payload))
+
+}
+
+
+
+export async function patchVenue(venueId, payload) {
+
+  return request(() => cloudApi.patch(`/venues/${venueId}`, payload))
+
+}
+
+
+
+export async function deactivateVenue(venueId) {
+
+  return request(() => cloudApi.delete(`/venues/${venueId}`))
+
+}
+
+
+
+export async function listTenants() {
+
+  return request(() => cloudApi.get('/tenants'))
+
+}
+
+
+
+export async function createTenant(payload) {
+
+  return request(() => cloudApi.post('/tenants', payload))
+
+}
+
+
+
+export async function patchTenant(tenantId, payload) {
+
+  return request(() => cloudApi.patch(`/tenants/${tenantId}`, payload))
+
+}
+
+
+
+export async function deactivateTenant(tenantId) {
+
+  return request(() => cloudApi.delete(`/tenants/${tenantId}`))
+
+}
+
+
+
+export async function listCustomers() {
+
+  return request(() => cloudApi.get('/customers'))
+
+}
+
+
+
+export async function createCustomer(payload) {
+
+  return request(() => cloudApi.post('/customers', payload))
+
+}
+
+
+
+export async function patchCustomer(customerId, payload) {
+
+  return request(() => cloudApi.patch(`/customers/${customerId}`, payload))
+
+}
+
+
+
+export async function deactivateCustomer(customerId) {
+
+  return request(() => cloudApi.delete(`/customers/${customerId}`))
+
+}
+
+
+
+export async function listVenueRoles(venueId) {
+
+  return request(() => cloudApi.get(`/venues/${venueId}/roles`))
+
+}
+
+
+
+export async function assignVenueRole(venueId, payload) {
+
+  return request(() => cloudApi.post(`/venues/${venueId}/roles`, payload))
+
+}
+
+
+
+export async function unassignVenueRole(venueId, assignmentId) {
+
+  return request(() => cloudApi.delete(`/venues/${venueId}/roles/${assignmentId}`))
+
+}
+
+
+
+export async function listLicensePlans() {
+
+  return request(() => cloudApi.get('/license-plans'))
+
+}
+
+
+
+export async function renewLicense(licenseId, payload = {}) {
+
+  return request(() => cloudApi.post(`/licenses/${licenseId}/renew`, payload))
 
 }
 

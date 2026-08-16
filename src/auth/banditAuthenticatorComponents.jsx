@@ -1,5 +1,39 @@
 import React from 'react'
-import { Button, Heading, Text, useAuthenticator, useTheme, View } from '@aws-amplify/ui-react'
+import { Button, Flex, Heading, Text, useAuthenticator, useTheme, View } from '@aws-amplify/ui-react'
+import {
+  getPreferRememberUsername,
+  setPreferRememberUsername,
+} from './rememberUsername'
+
+function RememberUsernameToggle() {
+  const { tokens } = useTheme()
+  const [checked, setChecked] = React.useState(() => getPreferRememberUsername())
+
+  return (
+    <Flex
+      alignItems="center"
+      justifyContent="center"
+      gap={tokens.space.xs}
+      padding={`${tokens.space.xs} 0 ${tokens.space.xxs} 0`}
+      as="label"
+      style={{ cursor: 'pointer' }}
+    >
+      <input
+        type="checkbox"
+        name="rememberUsername"
+        checked={checked}
+        onChange={(event) => {
+          const next = event.target.checked
+          setChecked(next)
+          setPreferRememberUsername(next)
+        }}
+      />
+      <Text fontSize={tokens.fontSizes.small} color={tokens.colors.font.secondary}>
+        Remember username
+      </Text>
+    </Flex>
+  )
+}
 
 export const banditAuthenticatorComponents = {
   SignIn: {
@@ -22,6 +56,7 @@ export const banditAuthenticatorComponents = {
 
       return (
         <View textAlign="center" padding={`${tokens.space.small} 0 0 0`}>
+          <RememberUsernameToggle />
           <Button fontWeight="normal" onClick={toForgotPassword} size="small" variation="link">
             Reset password
           </Button>

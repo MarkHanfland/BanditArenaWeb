@@ -9,6 +9,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -24,7 +25,9 @@ import {
   checkUpdates,
   decommissionDevice,
   issueLicense,
+  listCustomers,
   listProductInstances,
+  listVenues,
   provisionDevice,
   transferDevice,
 } from '../../api/cloud'
@@ -37,6 +40,11 @@ export default function FleetPage() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [deviceModel, setDeviceModel] = useState('BanditArena-Alpha')
   const [computeSerialNumber, setComputeSerialNumber] = useState('')
+  const [venueId, setVenueId] = useState('')
+  const [venues, setVenues] = useState([])
+  const [customers, setCustomers] = useState([])
+  const [buyerKind, setBuyerKind] = useState('operator')
+  const [buyerCustomerId, setBuyerCustomerId] = useState('')
   const [message, setMessage] = useState('')
   const [messageSeverity, setMessageSeverity] = useState('success')
   const [credentials, setCredentials] = useState(null)
@@ -46,14 +54,24 @@ export default function FleetPage() {
 
   const loadFleet = useCallback(async () => {
     setLoading(true)
-    const { data, error: apiError } = await listProductInstances()
-    if (apiError) {
-      setError(apiError)
+    const [instancesRes, venuesRes, customersRes] = await Promise.all([
+      listProductInstances(),
+      listVenues(),
+      listCustomers(),
+    ])
+    if (instancesRes.error) {
+      setError(instancesRes.error)
       setLoading(false)
       return
     }
-    const list = data?.instances || []
+    const list = instancesRes.data?.instances || []
     setInstances(list)
+    const nextVenues = venuesRes.data?.venues || []
+    setVenues(nextVenues)
+    setVenueId((current) => current || nextVenues[0]?.venueId || '')
+    const nextCustomers = customersRes.data?.customers || []
+    setCustomers(nextCustomers)
+    setBuyerCustomerId((current) => current || nextCustomers[0]?.customerId || '')
     setError('')
 
     const updates = {}
@@ -84,6 +102,9 @@ export default function FleetPage() {
     const { data, error: apiError } = await provisionDevice({
       model: deviceModel,
       computeSerialNumber: serial,
+      venueId: venueId || undefined,
+      buyerKind,
+      buyerCustomerId: buyerKind === 'customer' ? buyerCustomerId || undefined : undefined,
     })
     if (apiError) {
       setMessageSeverity('error')
@@ -315,6 +336,50 @@ export default function FleetPage() {
             value={deviceModel}
             onChange={(e) => setDeviceModel(e.target.value)}
           />
+          <TextField
+            select
+            label="Venue"
+            fullWidth
+            sx={{ mt: 2 }}
+            value={venueId}
+            onChange={(e) => setVenueId(e.target.value)}
+            inputProps={{ 'data-testid': 'register-venue' }}
+          >
+            {venues.map((venue) => (
+              <MenuItem key={venue.venueId} value={venue.venueId}>
+                {venue.name || venue.venueId}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Buyer"
+            fullWidth
+            sx={{ mt: 2 }}
+            value={buyerKind}
+            onChange={(e) => setBuyerKind(e.target.value)}
+            inputProps={{ 'data-testid': 'register-buyer-kind' }}
+          >
+            <MenuItem value="operator">Operator tenant</MenuItem>
+            <MenuItem value="customer">Customer</MenuItem>
+          </TextField>
+          {buyerKind === 'customer' && (
+            <TextField
+              select
+              label="Buyer customer"
+              fullWidth
+              sx={{ mt: 2 }}
+              value={buyerCustomerId}
+              onChange={(e) => setBuyerCustomerId(e.target.value)}
+              inputProps={{ 'data-testid': 'register-buyer-customer' }}
+            >
+              {customers.map((customer) => (
+                <MenuItem key={customer.customerId} value={customer.customerId}>
+                  {customer.name || customer.customerId}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRegisterOpen(false)}>Cancel</Button>

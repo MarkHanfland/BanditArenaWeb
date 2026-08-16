@@ -18,6 +18,7 @@ const roleCases: RoleCase[] = [
       'menu-fleet',
       'menu-billing',
       'menu-content',
+      'menu-staff',
     ],
   },
   {
@@ -30,7 +31,7 @@ const roleCases: RoleCase[] = [
       'menu-maintenance',
       'menu-usage',
     ],
-    notExpected: ['menu-billing', 'menu-fleet', 'menu-users'],
+    notExpected: ['menu-billing', 'menu-fleet', 'menu-users', 'menu-staff'],
   },
   {
     roleId: 'venueAdmin',
@@ -43,6 +44,8 @@ const roleCases: RoleCase[] = [
       'menu-config',
       'menu-content',
       'menu-users',
+      'menu-reservations',
+      'menu-staff',
       'menu-billing',
       'menu-usage',
       'menu-fleet',
