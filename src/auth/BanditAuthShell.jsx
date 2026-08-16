@@ -1,10 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Authenticator, ThemeProvider, useAuthenticator } from '@aws-amplify/ui-react'
+import { Hub } from 'aws-amplify/utils'
 import '@aws-amplify/ui-react/styles.css'
 import './auth-overrides.css'
 import { Box, Button, CircularProgress, Typography } from '@mui/material'
 import { banditAuthTheme } from './banditAuthTheme'
 import { banditAuthenticatorComponents } from './banditAuthenticatorComponents'
+import {
+  getRememberedUsername,
+  initPreferRememberFromStorage,
+  persistRememberUsernamePreference,
+} from './rememberUsername'
 
 const FADE_DURATION_MS = 1800
 const DISPLAY_DURATION_MS = 10000
@@ -241,6 +247,11 @@ export function BanditLocalBypassShell({ onEnter, isEntering = false }) {
 }
 
 function BrandedAuthenticator() {
+  const rememberedUsername = useMemo(() => {
+    initPreferRememberFromStorage()
+    return getRememberedUsername()
+  }, [])
+
   return (
     <Box className="bandit-auth-shell" sx={{ width: '100%' }}>
       <ThemeProvider theme={banditAuthTheme} colorMode="dark">
@@ -248,6 +259,15 @@ function BrandedAuthenticator() {
           hideSignUp
           loginMechanisms={['username']}
           components={banditAuthenticatorComponents}
+          formFields={{
+            signIn: {
+              username: {
+                label: 'Username',
+                placeholder: 'Enter your username',
+                defaultValue: rememberedUsername,
+              },
+            },
+          }}
         />
       </ThemeProvider>
     </Box>
@@ -269,6 +289,20 @@ export default function CognitoAuthGate({ children }) {
 }
 
 export function CognitoAuthRoot({ children }) {
+  useEffect(() => {
+    initPreferRememberFromStorage()
+    return Hub.listen('auth', ({ payload }) => {
+      if (payload.event !== 'signedIn') {
+        return
+      }
+      const username =
+        payload.data?.username ||
+        payload.data?.signInDetails?.loginId ||
+        ''
+      persistRememberUsernamePreference(username)
+    })
+  }, [])
+
   return (
     <Authenticator.Provider>
       <CognitoAuthGate>{children}</CognitoAuthGate>

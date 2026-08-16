@@ -16,6 +16,7 @@ import {
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
 import { bookReservation, listReservations, listUsers, sendNotification } from '../../api/cloud'
+import { rememberPlayer } from '../../session/lastPlayers'
 
 export default function ReservationsPage() {
   const [loading, setLoading] = useState(true)
@@ -57,7 +58,14 @@ export default function ReservationsPage() {
       template: 'session_reminder',
       channel: 'email',
     })
-    setMessage(`Booked ${data?.reservation?.slotId} — reminder notification sent (demo)`)
+    const bookedUser = users.find((user) => user.userId === selectedUserId)
+    rememberPlayer({
+      userId: selectedUserId,
+      displayName: bookedUser?.name || selectedUserId,
+    })
+    setMessage(
+      `Booked ${data?.reservation?.slotId} for ${bookedUser?.name || selectedUserId}. Set as next player on this console.`,
+    )
     await loadData()
   }
 
@@ -79,6 +87,7 @@ export default function ReservationsPage() {
             sx={{ maxWidth: 320 }}
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
+            inputProps={{ 'data-testid': 'book-as-user' }}
           >
             {users.map((user) => (
               <MenuItem key={user.userId} value={user.userId}>{user.name}</MenuItem>

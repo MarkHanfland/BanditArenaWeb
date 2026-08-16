@@ -18,6 +18,11 @@ import {
   TableRow,
   Paper,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import StopIcon from '@mui/icons-material/Stop'
@@ -109,7 +114,21 @@ function ServicesTab() {
     await fetchServicesStatus()
   }
 
+  const [stopConfirmService, setStopConfirmService] = useState(null)
+
+  const isSafetyCritical = (serviceName) =>
+    String(serviceName || '').toLowerCase().replace(/[^a-z0-9]/g, '') === 'safetycontroller'
+
+  const requestStop = (serviceName) => {
+    if (isSafetyCritical(serviceName)) {
+      setStopConfirmService(serviceName)
+      return
+    }
+    handleStop(serviceName)
+  }
+
   const handleStop = async (serviceName) => {
+    setStopConfirmService(null)
     setActionLoading({ ...actionLoading, [serviceName]: 'stop' })
     const { error } = await stopService(serviceName)
     if (error) {
@@ -129,15 +148,16 @@ function ServicesTab() {
     await fetchServicesStatus()
   }
 
-  const getHealthColor = (secondsSinceHeartbeat) => {
+  const getHealthColor = (secondsSinceHeartbeat, failed) => {
+    if (failed) return 'error'
     if (secondsSinceHeartbeat < 3) return 'success'
     if (secondsSinceHeartbeat < 10) return 'warning'
     return 'error'
   }
 
-  const getHealthIcon = (secondsSinceHeartbeat) => {
-    if (secondsSinceHeartbeat < 3) return <CheckCircleIcon />
-    return <ErrorIcon />
+  const getHealthIcon = (secondsSinceHeartbeat, failed) => {
+    if (failed || secondsSinceHeartbeat >= 3) return <ErrorIcon />
+    return <CheckCircleIcon />
   }
 
   if (loading) {
@@ -194,10 +214,10 @@ function ServicesTab() {
               {services.map((service) => (
                 <Chip
                   key={service.serviceName}
-                  icon={getHealthIcon(service.secondsSinceLastHeartbeat)}
+                  icon={getHealthIcon(service.secondsSinceLastHeartbeat, service.failed)}
                   label={`${service.serviceName} (${service.secondsSinceLastHeartbeat}s)`}
-                  color={getHealthColor(service.secondsSinceLastHeartbeat)}
-                  variant={service.running ? 'filled' : 'outlined'}
+                  color={getHealthColor(service.secondsSinceLastHeartbeat, service.failed)}
+                  variant={(service.running && !service.failed) ? 'filled' : 'outlined'}
                 />
               ))}
             </Box>
@@ -243,8 +263,8 @@ function ServicesTab() {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Chip
-                        label={service.running ? 'Running' : 'Stopped'}
-                        color={service.running ? 'success' : 'error'}
+                        label={service.failed ? 'Failed' : (service.running ? 'Running' : 'Stopped')}
+                        color={(service.failed || !service.running) ? 'error' : 'success'}
                         size="small"
                       />
                       {service.enabled && (
@@ -263,7 +283,7 @@ function ServicesTab() {
                   <TableCell align="right">
                     <Chip
                       label={`${service.secondsSinceLastHeartbeat}s ago`}
-                      color={getHealthColor(service.secondsSinceLastHeartbeat)}
+                      color={getHealthColor(service.secondsSinceLastHeartbeat, service.failed)}
                       size="small"
                     />
                   </TableCell>
@@ -289,7 +309,7 @@ function ServicesTab() {
                             <IconButton
                               color="error"
                               size="small"
-                              onClick={() => handleStop(service.serviceName)}
+                              onClick={() => requestStop(service.serviceName)}
                               disabled={actionLoading[service.serviceName]}
                             >
                               {actionLoading[service.serviceName] === 'stop' ? (
@@ -324,6 +344,31 @@ function ServicesTab() {
           </Table>
         </TableContainer>
       </Grid>
+
+      <Dialog
+        open={Boolean(stopConfirmService)}
+        onClose={() => setStopConfirmService(null)}
+        aria-labelledby="safety-stop-confirm-title"
+      >
+        <DialogTitle id="safety-stop-confirm-title">Stop Safety Controller?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Stopping SafetyController disables the active safety supervisor. Confirm only if you
+            intend to take the unit out of supervised operation.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setStopConfirmService(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            onClick={() => handleStop(stopConfirmService)}
+            autoFocus
+          >
+            Stop SafetyController
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   )
 }

@@ -8,7 +8,8 @@ const LOCAL_BYPASS_TOKEN = '__bandit_local_auth_bypass__'
 /**
  * Authentication context — Amplify session adapter (FR-SW-ADMIN-004).
  *
- * Cognito mode: tokens synced from Amplify via fetchAuthSession (SRP / Authenticator).
+ * Cognito mode: custom Amplify Authenticator (SRP); access/id tokens mirrored into React
+ * state (memory). Amplify refresh token is tab-scoped via sessionStorage (see tokenStorage.js).
  * Local bypass: synthetic token when device auth_enabled=false.
  */
 export function AuthProvider({

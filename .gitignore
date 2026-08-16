@@ -9,6 +9,11 @@ dist/
 # Logs
 *.log
 
+# Playwright
+test-results/
+playwright-report/
+test_logs/
+
 # OS
 .DS_Store
 Thumbs.db

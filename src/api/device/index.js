@@ -3,6 +3,7 @@ export {
   clearAuthToken,
   setRefreshCallback,
   setLoginCallback,
+  getAuthInfo,
 } from './client'
 
 export { getConfig, updateConfig } from './config'
@@ -16,4 +17,8 @@ export {
   getTelemetryStats,
   getTelemetryConfig,
   pingDevice,
+  getCurrentSession,
+  startSession,
+  endSession,
 } from './treadmill'
+export { applyCameraSimulatorMediaMode } from './cameraSimulator'

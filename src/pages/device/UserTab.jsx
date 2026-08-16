@@ -12,6 +12,9 @@ import {
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { getTelemetryCurrent } from '../../api/device'
+import PlayerSessionControls from '../../components/shared/PlayerSessionControls'
+import { useDeviceOnline } from '../../hooks/useDeviceOnline'
+import { SESSION_PHASE, usePlayerSession } from '../../session/PlayerSessionContext'
 
 const MAX_CONSECUTIVE_FAILURES = 5
 
@@ -29,12 +32,13 @@ function UserTab() {
   const [error, setError] = useState(null)
   const [apiConnected, setApiConnected] = useState(true)
   const [consecutiveFailures, setConsecutiveFailures] = useState(0)
+  const deviceOnline = useDeviceOnline()
+  const { phase, session, selected } = usePlayerSession()
 
   const fetchUserStatus = async () => {
     const { data, error: fetchError, noContent } = await getTelemetryCurrent()
     if (fetchError) {
-      console.error('UserTab fetch error:', fetchError)
-      setConsecutiveFailures(prev => {
+      setConsecutiveFailures((prev) => {
         const newCount = prev + 1
         if (newCount >= MAX_CONSECUTIVE_FAILURES) {
           setApiConnected(false)
@@ -44,40 +48,67 @@ function UserTab() {
       })
     } else if (noContent) {
       // Server returned 204 - no data yet, not an error
-      console.debug('UserTab: Waiting for telemetry data...')
     } else if (data?.user) {
-      console.debug('UserTab received data:', data.user)
-      // Compute speed from velocity magnitude
       const velX = data.user.vel?.x || 0
       const velY = data.user.vel?.y || 0
       const computedSpeed = Math.sqrt(velX * velX + velY * velY)
-      
-      // Map telemetry user data to expected format
+
       setUserState({
         userPosition: data.user.pos,
         userVelocity: data.user.vel,
         userFacingDirection: data.user.facing,
-        userDirection: data.user.moveDir || data.user.facing,
         userSpeed: computedSpeed,
         virtualSpeed: computedSpeed,
         userStatus: data.user.status,
         distanceFromCenter: data.user.dist,
-        timestamp: data.ts
+        timestamp: data.ts,
       })
       setError(null)
       setConsecutiveFailures(0)
       setApiConnected(true)
-    } else {
-      console.warn('UserTab: Got response but no user data:', data)
     }
     setLoading(false)
   }
 
   useEffect(() => {
+    if (phase !== SESSION_PHASE.active) {
+      setLoading(false)
+      return undefined
+    }
     fetchUserStatus()
-    const interval = setInterval(fetchUserStatus, 1000) // Update every second
+    const interval = setInterval(fetchUserStatus, 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [phase])
+
+  if (phase === SESSION_PHASE.idle) {
+    return (
+      <Alert severity="info" data-testid="user-tab-idle">
+        No player session is pending. Select an enrolled player in the header to queue a session start.
+      </Alert>
+    )
+  }
+
+  if (phase === SESSION_PHASE.pending) {
+    const pendingName = selected?.displayName || selected?.name || selected?.userId
+    return (
+      <Grid container spacing={3} data-testid="user-tab-pending">
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Pending session start
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {pendingName} is selected. Start the session to begin OPERATING. Age 8+ is attested
+                when the account is created, or on a walk-in.
+              </Typography>
+              <PlayerSessionControls deviceOnline={deviceOnline !== false} />
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+    )
+  }
 
   if (loading) {
     return (
@@ -98,13 +129,13 @@ function UserTab() {
             Unable to connect to Bandit Arena API. Please ensure the bandit_arena service is running.
           </Typography>
         </Alert>
-        <Button 
-          variant="contained" 
+        <Button
+          variant="contained"
           onClick={() => {
             setConsecutiveFailures(0)
             setApiConnected(true)
             fetchUserStatus()
-          }} 
+          }}
           startIcon={<RefreshIcon />}
         >
           Retry Connection
@@ -114,9 +145,24 @@ function UserTab() {
   }
 
   const statusInfo = UserStatusMap[userState?.userStatus] || UserStatusMap[4]
+  const activeName = session?.displayName || session?.userId || 'Player'
 
   return (
-    <Grid container spacing={3}>
+    <Grid container spacing={3} data-testid="user-tab-active">
+      <Grid item xs={12}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Active session
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Live pose for {activeName}. End the session from the header when the run is finished.
+            </Typography>
+            <PlayerSessionControls deviceOnline={deviceOnline !== false} />
+          </CardContent>
+        </Card>
+      </Grid>
+
       <Grid item xs={12}>
         <Card>
           <CardContent>
@@ -124,10 +170,10 @@ function UserTab() {
               User Status
             </Typography>
             <Box sx={{ mt: 2 }}>
-              <Chip 
-                label={statusInfo.label} 
-                color={statusInfo.color} 
-                size="large"
+              <Chip
+                label={statusInfo.label}
+                color={statusInfo.color}
+                size="medium"
                 sx={{ fontSize: '1.1rem', py: 3 }}
               />
             </Box>
@@ -185,23 +231,23 @@ function UserTab() {
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Direction Vector
+              Velocity
             </Typography>
             <Grid container spacing={2} sx={{ mt: 1 }}>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
-                  X Direction
+                  X Velocity
                 </Typography>
                 <Typography variant="h5">
-                  {userState?.userDirection?.x?.toFixed(3) || '0.000'}
+                  {userState?.userVelocity?.x?.toFixed(3) || '0.000'} m/s
                 </Typography>
               </Grid>
               <Grid item xs={6}>
                 <Typography variant="body2" color="text.secondary">
-                  Y Direction
+                  Y Velocity
                 </Typography>
                 <Typography variant="h5">
-                  {userState?.userDirection?.y?.toFixed(3) || '0.000'}
+                  {userState?.userVelocity?.y?.toFixed(3) || '0.000'} m/s
                 </Typography>
               </Grid>
             </Grid>
@@ -209,6 +255,33 @@ function UserTab() {
         </Card>
       </Grid>
 
+      <Grid item xs={12}>
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Facing Direction
+            </Typography>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  X Facing
+                </Typography>
+                <Typography variant="h5">
+                  {userState?.userFacingDirection?.x?.toFixed(3) || '0.000'}
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="body2" color="text.secondary">
+                  Y Facing
+                </Typography>
+                <Typography variant="h5">
+                  {userState?.userFacingDirection?.y?.toFixed(3) || '0.000'}
+                </Typography>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+      </Grid>
     </Grid>
   )
 }

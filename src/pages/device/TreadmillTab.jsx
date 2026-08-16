@@ -13,15 +13,9 @@ import {
 } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { getTelemetryCurrent } from '../../api/device'
+import { treadmillStateInfo } from '../../device/treadmillState'
 
 const MAX_CONSECUTIVE_FAILURES = 5
-
-const TreadmillStateMap = {
-  0: { label: 'Startup', color: 'warning' },
-  1: { label: 'Failure', color: 'error' },
-  2: { label: 'Operating', color: 'success' },
-  3: { label: 'Safety Stop', color: 'error' },
-}
 
 function TreadmillTab() {
   const [treadmillState, setTreadmillState] = useState(null)
@@ -43,10 +37,8 @@ function TreadmillTab() {
         return newCount
       })
     } else if (noContent) {
-      // Server returned 204 - no data yet, not an error
-      console.debug('TreadmillTab: Waiting for telemetry data...')
+      // Idle / pre-session: no samples until a player session is recording
     } else if (data?.tread) {
-      console.debug('TreadmillTab received data:', data.tread)
       // Map telemetry tread data to expected format
       setTreadmillState({
         treadVelocity: data.tread.vel,
@@ -106,7 +98,7 @@ function TreadmillTab() {
     )
   }
 
-  const statusInfo = TreadmillStateMap[treadmillState?.treadmillState] || TreadmillStateMap[0]
+  const statusInfo = treadmillStateInfo(treadmillState?.treadmillState)
   const speedProgress = (treadmillState?.treadSpeed / 5.0) * 100 // Assuming max speed 5.0 m/s
   const avatarVirtualSpeed = Math.sqrt(
     Math.pow(treadmillState?.avatarVirtualVelocity?.x || 0, 2) +
@@ -127,6 +119,7 @@ function TreadmillTab() {
                 label={statusInfo.label} 
                 color={statusInfo.color} 
                 size="large"
+                data-testid="treadmill-status"
                 sx={{ fontSize: '1.1rem', py: 3 }}
               />
             </Box>

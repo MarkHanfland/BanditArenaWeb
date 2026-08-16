@@ -1,10 +1,42 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { Box, CircularProgress, Alert, Typography, Paper, Button } from '@mui/material'
+import { Box, CircularProgress, Alert, Typography, Button } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import { getConfig, getTelemetryCurrent, getServicesStatus, getTelemetryStats } from '../../api/device'
+import { getConfig, getTelemetryCurrent } from '../../api/device'
+import { usePlayerSession } from '../../session/PlayerSessionContext'
 
 // Constants for position history
 const POSITION_HISTORY_MAX_DURATION_MS = 3 * 60 * 1000 // 3 minutes in milliseconds
+const USER_STATUS_FALL = 2
+const TRAIL_COLOR_SAFE = '#4db6c4'
+const TRAIL_COLOR_WARNING = '#ffeb3b'
+const DEFAULT_BOUNDARY_WARNING_RADIUS_M = 1.0
+const DEFAULT_BOUNDARY_VIOLATION_RADIUS_M = 1.4
+
+function safetyBoundaryRadii(config) {
+  let warning = DEFAULT_BOUNDARY_WARNING_RADIUS_M
+  let violation = DEFAULT_BOUNDARY_VIOLATION_RADIUS_M
+  const safety = (config?.services || []).find((s) => s.name === 'SafetyController')
+  const props = safety?.properties || {}
+  if (props.boundary_warning_radius != null && props.boundary_warning_radius !== '') {
+    warning = Number(props.boundary_warning_radius)
+  }
+  if (props.boundary_violation_radius != null && props.boundary_violation_radius !== '') {
+    violation = Number(props.boundary_violation_radius)
+  }
+  return { warning, violation }
+}
+
+function trailPathFromPoints(points, worldToSvg) {
+  if (!points || points.length < 2) {
+    return ''
+  }
+  const mapped = points.map((p) => worldToSvg(p.x, p.y))
+  let d = `M ${mapped[0].x} ${mapped[0].y}`
+  for (let i = 1; i < mapped.length; i++) {
+    d += ` L ${mapped[i].x} ${mapped[i].y}`
+  }
+  return d
+}
 
 // Zoom-invariant UI scales (baseline sizes rendered at 100% zoom)
 const BASELINE_ICON_PX = 10
@@ -19,8 +51,9 @@ const USER_MARKER_INNER_RADIUS_FRAC = 0.095
 const USER_MARKER_MIN_PX = 12
 const USER_MARKER_MAX_INNER_FRAC = 0.12
 const COMPASS_NATIVE_SIZE = 100
-const GRADE_NATIVE_WIDTH = 150
-const GRADE_NATIVE_HEIGHT = 92
+/** Single 3D cylinder (2 tall × 30 circumference) + values then pitch/roll labels. */
+const GRADE_NATIVE_WIDTH = 176
+const GRADE_NATIVE_HEIGHT = 110
 /**
  * Clearance is against the tread *surface* (inner circle), not the outer wall.
  * Corner widgets may overlap the dark safety-wall ring — that ring is visual
@@ -40,7 +73,242 @@ const CORNER_FILL = 1.0
 const COMPASS_CORNER_MARGIN = CORNER_MARGIN
 const COMPASS_LEFT_MARGIN = CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
 const GRADE_CORNER_MARGIN = CORNER_MARGIN
-const GRADE_LEFT_MARGIN = CORNER_MARGIN + TREAD_GRAPHIC_SIDE_INSET
+/** Flush to the canvas corner (tighter than compass — no side inset). */
+const GRADE_LEFT_MARGIN = 2
+const GRADE_MAX_DEG = 8
+const GRADE_CIRCUMFERENCE = 30 // model units (was 10; tripled)
+const GRADE_UNIT_PX = 8 // 1 model unit → pixels (cylinder: height 2, circumference 30)
+/** Match dashboard cyan highlight (user marker / status blue). */
+const GRADE_STROKE = '#00e5ff'
+const GRADE_LABEL_FILL = 'rgba(0, 229, 255, 0.85)'
+/** Body fills desaturated (~20% of prior saturation on dark cyan). */
+const GRADE_FILL = 'rgba(14, 19, 20, 0.66)'
+const GRADE_FILL_TOP = 'rgba(14, 19, 20, 0.96)'
+const GRADE_VALUE_FONT_SIZE = 10.4 // 13 × 0.8
+const toGradePct = (deg) => Math.tan(deg * Math.PI / 180) * 100
+
+function formatGradePct(pct) {
+  const abs = Math.abs(pct)
+  const sign = pct < 0 ? '−' : ''
+  return `${sign}${abs.toFixed(1)}%`
+}
+
+function rotX3(p, a) {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return { x: p.x, y: p.y * c - p.z * s, z: p.y * s + p.z * c }
+}
+
+function rotZ3(p, a) {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z }
+}
+
+/**
+ * Perspective 3D cylinder: height 2, circumference 30 (radius = 30/2π).
+ *
+ * Rest pose: camera behind the belt looking forward, elevated so the circular
+ * ends foreshorten. Pitch/roll are applied in *view space* afterward so:
+ *   +pitch → tip straight toward the viewer (no sideways lean when roll=0)
+ *   −pitch → tip straight away
+ *   +roll  → tip right; −roll → tip left
+ */
+function GradeCylinderGizmo({ pitchDeg, rollDeg, cx, cy }) {
+  const radius = (GRADE_CIRCUMFERENCE / (2 * Math.PI)) * GRADE_UNIT_PX
+  const halfH = (2 * GRADE_UNIT_PX) / 2
+  const ringN = 48
+  // Amplify ±8° physical so the tilt is readable in the small gizmo.
+  const visAmp = (32 / GRADE_MAX_DEG) * (Math.PI / 180)
+  const pitch = Math.max(-GRADE_MAX_DEG, Math.min(GRADE_MAX_DEG, pitchDeg)) * visAmp
+  const roll = Math.max(-GRADE_MAX_DEG, Math.min(GRADE_MAX_DEG, rollDeg)) * visAmp
+
+  // Elevation only (no yaw): pitch then reads as pure toward/away on screen.
+  // Ends still foreshorten from the look-down angle + cylinder curvature.
+  const viewElev = 28 * (Math.PI / 180)
+  const focal = 140
+
+  const project = (p) => {
+    // 1) Rest camera: behind looking along +Z, slightly down.
+    let q = rotX3(p, -viewElev)
+    // 2) View-space pitch: tip toward (−) / away (+) along screen vertical.
+    q = rotX3(q, -pitch)
+    // 3) View-space roll: tip right (+) / left (−) along screen horizontal.
+    q = rotZ3(q, -roll)
+    const w = focal / (focal + q.z)
+    return { x: cx + q.x * w, y: cy - q.y * w, z: q.z }
+  }
+
+  const top = []
+  const bot = []
+  for (let i = 0; i < ringN; i += 1) {
+    const a = (i / ringN) * Math.PI * 2
+    const x = Math.cos(a) * radius
+    const z = Math.sin(a) * radius
+    top.push(project({ x, y: halfH, z }))
+    bot.push(project({ x, y: -halfH, z }))
+  }
+
+  // Convex hull of all projected rim points → clean body silhouette under tilt.
+  const hull = (() => {
+    const pts = [...top, ...bot].map((p) => ({ x: p.x, y: p.y }))
+    pts.sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x))
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+    const lower = []
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+        lower.pop()
+      }
+      lower.push(p)
+    }
+    const upper = []
+    for (let i = pts.length - 1; i >= 0; i -= 1) {
+      const p = pts[i]
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+        upper.pop()
+      }
+      upper.push(p)
+    }
+    lower.pop()
+    upper.pop()
+    return lower.concat(upper)
+  })()
+
+  const poly = (pts) => pts.map((p) => `${p.x},${p.y}`).join(' ')
+  const topMeanZ = top.reduce((s, p) => s + p.z, 0) / top.length
+  const botMeanZ = bot.reduce((s, p) => s + p.z, 0) / bot.length
+  const drawTopFirst = topMeanZ > botMeanZ
+
+  const endPoly = (pts, fill) => (
+    <polygon
+      points={poly(pts)}
+      fill={fill}
+      stroke={GRADE_STROKE}
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+  )
+
+  return (
+    <g>
+      <polygon
+        points={poly(hull)}
+        fill={GRADE_FILL}
+        stroke={GRADE_STROKE}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {drawTopFirst ? (
+        <>
+          {endPoly(bot, GRADE_FILL)}
+          {endPoly(top, GRADE_FILL_TOP)}
+        </>
+      ) : (
+        <>
+          {endPoly(top, GRADE_FILL_TOP)}
+          {endPoly(bot, GRADE_FILL)}
+        </>
+      )}
+    </g>
+  )
+}
+
+// GradeIndicator — one 3D cylinder; values with pitch/roll labels underneath.
+function GradeIndicator({
+  rollDeg,
+  pitchDeg,
+  scale = 1,
+  left = GRADE_LEFT_MARGIN,
+  bottom = GRADE_CORNER_MARGIN,
+}) {
+  const W = GRADE_NATIVE_WIDTH
+  const H = GRADE_NATIVE_HEIGHT
+
+  const pitchPct = toGradePct(pitchDeg)
+  const rollPct = toGradePct(rollDeg)
+  const pitchLabel = formatGradePct(pitchPct)
+  const rollLabel = formatGradePct(rollPct)
+
+  // Bias content left so the gizmo sits in the canvas corner.
+  const pitchCx = 28
+  const rollCx = 100
+  const cylCx = 64
+  const cylCy = 30
+  const valueY = 74
+  const labelY = 90
+
+  return (
+    <Box
+      sx={{
+        position: 'absolute',
+        bottom,
+        left,
+        zIndex: 100,
+        pointerEvents: 'none',
+        transform: `scale(${scale})`,
+        transformOrigin: 'bottom left',
+      }}
+      data-testid="dashboard-grade-indicator"
+    >
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} overflow="visible">
+        <GradeCylinderGizmo
+          pitchDeg={pitchDeg}
+          rollDeg={rollDeg}
+          cx={cylCx}
+          cy={cylCy}
+        />
+
+        <text
+          x={pitchCx}
+          y={valueY}
+          fill={GRADE_STROKE}
+          fontSize={GRADE_VALUE_FONT_SIZE}
+          fontFamily="Montserrat, sans-serif"
+          fontWeight="700"
+          textAnchor="middle"
+          data-testid="dashboard-grade-pitch"
+        >
+          {pitchLabel}
+        </text>
+        <text
+          x={pitchCx}
+          y={labelY}
+          fill={GRADE_LABEL_FILL}
+          fontSize="8"
+          fontFamily="Montserrat, sans-serif"
+          fontWeight="600"
+          textAnchor="middle"
+        >
+          PITCH
+        </text>
+
+        <text
+          x={rollCx}
+          y={valueY}
+          fill={GRADE_STROKE}
+          fontSize={GRADE_VALUE_FONT_SIZE}
+          fontFamily="Montserrat, sans-serif"
+          fontWeight="700"
+          textAnchor="middle"
+          data-testid="dashboard-grade-roll"
+        >
+          {rollLabel}
+        </text>
+        <text
+          x={rollCx}
+          y={labelY}
+          fill={GRADE_LABEL_FILL}
+          fontSize="8"
+          fontFamily="Montserrat, sans-serif"
+          fontWeight="600"
+          textAnchor="middle"
+        >
+          ROLL
+        </text>
+      </svg>
+    </Box>
+  )
+}
 
 /**
  * Largest CSS scale for a W×H packing box anchored in a canvas corner such that
@@ -95,121 +363,8 @@ function maxScaleForCornerBox({
 }
 
 
-// Stylish speed meter component
-function SpeedMeter({ label, value, maxValue, color, glowColor, unit = 'm/s' }) {
-  const percentage = Math.min((value / maxValue) * 100, 100)
-
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 180 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <Typography
-          variant="caption"
-          sx={{
-            color: '#888',
-            fontWeight: 600,
-            letterSpacing: 1,
-            fontSize: '10px'
-          }}
-        >
-          {label}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{
-            color: color,
-            fontFamily: 'monospace',
-            fontWeight: 700,
-            fontSize: '13px',
-            textShadow: `0 0 8px ${glowColor}`
-          }}
-        >
-          {value.toFixed(2)} {unit}
-        </Typography>
-      </Box>
-      <Box sx={{
-        position: 'relative',
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: 'rgba(255,255,255,0.05)',
-        overflow: 'hidden',
-        border: '1px solid rgba(255,255,255,0.1)'
-      }}>
-        {/* Background track with tick marks */}
-        <Box sx={{
-          position: 'absolute',
-          inset: 0,
-          display: 'flex',
-          justifyContent: 'space-between',
-          px: 0.5,
-          alignItems: 'center'
-        }}>
-          {[...Array(10)].map((_, i) => (
-            <Box
-              key={i}
-              sx={{
-                width: 1,
-                height: '60%',
-                backgroundColor: 'rgba(255,255,255,0.1)'
-              }}
-            />
-          ))}
-        </Box>
-        {/* Filled portion */}
-        <Box sx={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: `${percentage}%`,
-          background: `linear-gradient(90deg, ${color}66, ${color})`,
-          borderRadius: 4,
-          boxShadow: `0 0 12px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.3)`,
-          transition: 'width 0.15s ease-out'
-        }} />
-        {/* Glossy overlay */}
-        <Box sx={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 50%)',
-          borderRadius: 4,
-          pointerEvents: 'none'
-        }} />
-      </Box>
-    </Box>
-  )
-}
-
-// Session stats component
-function SessionStat({ label, value, color }) {
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.25 }}>
-      <Typography
-        variant="caption"
-        sx={{
-          color: '#666',
-          fontWeight: 600,
-          letterSpacing: 1,
-          fontSize: '9px'
-        }}
-      >
-        {label}
-      </Typography>
-      <Typography
-        variant="caption"
-        sx={{
-          color: color,
-          fontFamily: 'monospace',
-          fontWeight: 700,
-          fontSize: '14px'
-        }}
-      >
-        {value}
-      </Typography>
-    </Box>
-  )
-}
-
-// Compass component - shows tread and user facing direction
+// Under counteract these are typically opposite; do not prefer body facing here —
+// facing often aligns with centering push when the player is behind center.
 function DirectionCompass({
   treadDirection,
   userDirection,
@@ -241,9 +396,9 @@ function DirectionCompass({
     return Math.atan2(x, y) * 180 / Math.PI
   }, [userDirection])
 
-  // Show tread only when moving, but always show user facing direction when tracked
+  // Show tread only when belt is moving; show user whenever a direction is known
   const showTread = treadSpeed > 0.05 && treadAngle !== null
-  const showUser = userAngle !== null  // Show facing direction even when stationary
+  const showUser = userAngle !== null
 
   // Compute label position at the tip of each arrow in world-space (text stays upright)
   const getLabelPos = (angleDeg, r) => {
@@ -461,157 +616,8 @@ function DirectionCompass({
   )
 }
 
-// GradeIndicator — shows tread grade as a perspective ellipse viewed from above and slightly ahead.
-//
-// Visual encoding:
-//   Roll  (X-grade): rotates the entire ellipse so the long axis tilts left/right.
-//                    Positive roll → right side higher → counter-clockwise tilt (−SVG angle).
-//                    2× visual amplification: ±8° physical → ±16° apparent rotation.
-//   Pitch (Y-grade): stretches/compresses the minor axis (ry).
-//                    Positive pitch → grade toward viewer → front rim rises → taller ellipse.
-//                    Negative pitch → grade away → front rim drops → flatter ellipse.
-//                    1.1px/° amplification: ±8° physical → ±9px ry change on base 18px.
-//   Combined: rotation + ry-change apply simultaneously.
-//
-// The grade % label travels to the uphill rim point, correctly rotating around the full perimeter.
-// Gradient dark side = uphill, light side = downhill.
-function GradeIndicator({
-  rollDeg,
-  pitchDeg,
-  scale = 1,
-  left = GRADE_LEFT_MARGIN,
-  bottom = GRADE_CORNER_MARGIN,
-}) {
-  const W = 150
-  const H = 92
-  const cx = W / 2   // 75
-  const cy = 46      // vertical center of ellipse
-
-  const baseRx = 58  // half-width of flat disk
-  const baseRy = 18  // half-height (foreshortened perspective)
-
-  // ── Pitch: stretch/compress minor axis ──────────────────────────────────────
-  // pitchDeg > 0 = toward viewer → ry increases (front rim rises → taller disk).
-  // pitchDeg < 0 = away from viewer → ry decreases (front rim drops → flatter).
-  const pitchScale = 1.1   // px of ry change per degree of pitch (1:1 ratio at ±8° max)
-  const ry = Math.max(4, Math.min(baseRy + pitchDeg * pitchScale, baseRy * 3.5))
-
-  // ── Roll: rotate the ellipse around its center ─────────────────────────────
-  // Positive roll = right side higher. In SVG (+Y = down) that means CCW = negative angle.
-  // 2× amplification → ±8° physical becomes ±16° visible.
-  const maxVisualRotate = 16
-  const visualRotateDeg = Math.max(-maxVisualRotate, Math.min(-rollDeg * 2.0, maxVisualRotate))
-  const rotRad = visualRotateDeg * Math.PI / 180
-
-  // ── Grade magnitudes ────────────────────────────────────────────────────────
-  // gradMag in degrees (drives threshold + shape logic)
-  const gradMag = Math.sqrt(rollDeg * rollDeg + pitchDeg * pitchDeg)
-  // Convert actuator degrees → grade % for the label (tan(θ)×100)
-  const toGradePct = (deg) => Math.tan(deg * Math.PI / 180) * 100
-  const gradeMagPct = Math.sqrt(toGradePct(rollDeg) ** 2 + toGradePct(pitchDeg) ** 2)
-
-  // ── Uphill unit vector in the pre-rotation ellipse frame ───────────────────
-  // roll+  → right is uphill → +SVG-X
-  // pitch+ → toward viewer is uphill → -SVG-Y  (SVG Y-axis is inverted vs. screen intuition)
-  const uphillX = gradMag > 0.1 ? rollDeg / gradMag : 0
-  const uphillY = gradMag > 0.1 ? -pitchDeg / gradMag : 0
-
-  // Rotate the uphill vector into global SVG coordinates
-  // (the ellipse rotates by visualRotateDeg, so its uphill side rotates with it)
-  const uphillGX = uphillX * Math.cos(rotRad) - uphillY * Math.sin(rotRad)
-  const uphillGY = uphillX * Math.sin(rotRad) + uphillY * Math.cos(rotRad)
-
-  // ── Gradient endpoints in global SVG space ──────────────────────────────────
-  const gradR = Math.max(baseRx, ry) * 1.15
-  const g1x = cx + uphillGX * gradR   // uphill end → dark
-  const g1y = cy + uphillGY * gradR
-  const g2x = cx - uphillGX * gradR   // downhill end → light
-  const g2y = cy - uphillGY * gradR
-
-  // ── Label position: uphill rim point rotated into global SVG space ──────────
-  const labelOffset = 11
-  const rimPreX = uphillX * (baseRx + labelOffset)
-  const rimPreY = uphillY * (ry + labelOffset)
-  const highX = cx + rimPreX * Math.cos(rotRad) - rimPreY * Math.sin(rotRad)
-  const highY = cy + rimPreX * Math.sin(rotRad) + rimPreY * Math.cos(rotRad)
-
-  const showGrade = gradMag >= 0.3
-  const gradeLabelText = showGrade ? `${gradeMagPct.toFixed(1)}%` : null
-
-  return (
-    <Box sx={{ position: 'absolute', bottom, left, zIndex: 100, pointerEvents: 'none', transform: `scale(${scale})`, transformOrigin: 'bottom left' }}>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} overflow="visible">
-        <defs>
-          <linearGradient
-            id="gradeEllipseGrad"
-            gradientUnits="userSpaceOnUse"
-            x1={g1x} y1={g1y}
-            x2={g2x} y2={g2y}
-          >
-            <stop offset="0%" stopColor="rgba(0,8,25,0.10)" />
-            <stop offset="55%" stopColor="rgba(0,70,130,0.10)" />
-            <stop offset="100%" stopColor="rgba(0,170,220,0.10)" />
-          </linearGradient>
-        </defs>
-
-        {/* Outer glow / shadow halo — rotates with roll */}
-        <ellipse
-          cx={cx} cy={cy}
-          rx={baseRx + 7} ry={baseRy + 6}
-          fill="rgba(0,0,0,0.45)"
-          stroke="rgba(255,255,255,0.07)"
-          strokeWidth="1"
-          transform={`rotate(${visualRotateDeg}, ${cx}, ${cy})`}
-        />
-
-        {/* Main tread-disk ellipse — rotated by roll, height set by pitch */}
-        <ellipse
-          cx={cx} cy={cy}
-          rx={baseRx} ry={ry}
-          fill={showGrade ? 'url(#gradeEllipseGrad)' : 'rgba(0,25,45,0.10)'}
-          stroke="rgba(0,210,255,0.35)"
-          strokeWidth="1.5"
-          transform={`rotate(${visualRotateDeg}, ${cx}, ${cy})`}
-        />
-
-        {/* Center dot */}
-        <circle cx={cx} cy={cy} r="2" fill="rgba(255,255,255,0.4)" />
-
-        {/* Grade value label — travels to the uphill rim point */}
-        {showGrade && (
-          <text
-            x={highX}
-            y={highY}
-            fill="#00e5ff"
-            fontSize="9"
-            fontFamily="Montserrat, sans-serif"
-            fontWeight="700"
-            textAnchor="middle"
-            dominantBaseline="middle"
-          >
-            {gradeLabelText}
-          </text>
-        )}
-
-        {/* GRADE label */}
-        <text
-          x={cx}
-          y={H - 2}
-          fill="#00e5ff"
-          fontSize="8"
-          fontFamily="Montserrat, sans-serif"
-          fontWeight="600"
-          textAnchor="middle"
-          opacity="0.8"
-        >
-          GRADE
-        </text>
-      </svg>
-    </Box>
-  )
-}
-
 function DashboardTab() {
+  const { sessionActive } = usePlayerSession()
   const [config, setConfig] = useState(null)
   const [treadmillState, setTreadmillState] = useState(null)
   const [userState, setUserState] = useState(null)
@@ -629,6 +635,7 @@ function DashboardTab() {
   const lastNonZeroUserDirRef = useRef({ x: 0, y: 1 })
   const hexScaleRef = useRef(TREAD_HEX_SCALE)
   const prevUiScaleRef = useRef(1)
+  const sessionActiveRef = useRef(sessionActive)
 
   // Scale overlays and tread hex tiles relative to the current viewer size.
   const uiScale = useMemo(() => {
@@ -640,12 +647,7 @@ function DashboardTab() {
   }, [dimensions.width, dimensions.height])
 
   const MAX_CONSECUTIVE_FAILURES = 5 // Show disconnected state after 5 consecutive failures
-  const [sessionDurationSec, setSessionDurationSec] = useState(0)
-  const [vrDistanceMeters, setVrDistanceMeters] = useState(0)
-  const [openxrRuntimeName, setOpenxrRuntimeName] = useState('Unknown')
-  const [openxrLinkHealthy, setOpenxrLinkHealthy] = useState(null)
 
-  // Session tracking state (server-side, avoids uint64 precision issues and page-refresh loss)
   useEffect(() => {
     const fetchConfig = async () => {
       const { data, error } = await getConfig()
@@ -653,38 +655,11 @@ function DashboardTab() {
         setError(error)
       } else {
         setConfig(data)
-        const runtimeName = data?.openxr_runtime?.name || data?.openxr_runtime?.manifestPath || 'Unknown'
-        setOpenxrRuntimeName(runtimeName)
         setError(null)
       }
       setLoading(false)
     }
     fetchConfig()
-  }, [])
-
-  // Fetch service status for OpenXR heartbeat (poll modestly)
-  useEffect(() => {
-    let mounted = true
-
-    const fetchServiceStatus = async () => {
-      const { data, error: fetchError } = await getServicesStatus()
-      if (fetchError || !data?.services) return
-      if (!mounted) return
-
-      const oxrService = data.services.find(s => s.serviceName === 'OpenXR_Driver')
-      if (oxrService && typeof oxrService.secondsSinceLastHeartbeat === 'number') {
-        setOpenxrLinkHealthy(oxrService.secondsSinceLastHeartbeat < 5)
-      } else {
-        setOpenxrLinkHealthy(false)
-      }
-    }
-
-    fetchServiceStatus()
-    const interval = setInterval(fetchServiceStatus, 2000)
-    return () => {
-      mounted = false
-      clearInterval(interval)
-    }
   }, [])
 
   // Fetch telemetry (combined treadmill and user status)
@@ -700,12 +675,21 @@ function DashboardTab() {
         return newCount
       })
     } else if (noContent) {
-      // Server returned 204 - no data yet, not an error
-      console.debug('Dashboard: Waiting for telemetry data...')
+      // Idle / post-session: no samples — clear stale motion so the tread surface stops.
+      setTreadmillState(null)
+      setUserState(null)
+      setConsecutiveFailures(0)
+      setApiConnected(true)
     } else if (data) {
       // Reset failure count
       setConsecutiveFailures(0)
       setApiConnected(true)
+      // Ignore motion samples outside an active player session (prevents post-end scroll).
+      if (!sessionActiveRef.current) {
+        setTreadmillState(null)
+        setUserState(null)
+        return
+      }
       // Map telemetry data to treadmill state format expected by UI
       if (data.tread) {
         const treadSpeed = data.tread.speed || 0
@@ -721,12 +705,13 @@ function DashboardTab() {
       }
       // Map telemetry data to user state format expected by UI
       if (data.user) {
+        const velX = data.user.vel?.x || 0
+        const velY = data.user.vel?.y || 0
         setUserState({
           userPosition: data.user.pos,
           userVelocity: data.user.vel,
           userFacingDirection: data.user.facing,
-          userDirection: data.user.moveDir || data.user.facing,
-          userSpeed: data.user.speed || 0,
+          userSpeed: data.user.speed ?? Math.sqrt(velX * velX + velY * velY),
           virtualSpeed: data.user.virtualSpeed || 0,
           userStatus: data.user.status,
           distanceFromCenter: data.user.dist,
@@ -743,40 +728,21 @@ function DashboardTab() {
     treadmillStateRef.current = treadmillState
   }, [treadmillState])
 
+  // Stop tread surface scroll immediately when the player session ends (don't wait on telemetry).
+  useEffect(() => {
+    sessionActiveRef.current = sessionActive
+    if (!sessionActive) {
+      setTreadmillState(null)
+      setUserState(null)
+    }
+  }, [sessionActive])
+
   // Fetch telemetry periodically
   useEffect(() => {
     fetchStatus()
     const interval = setInterval(fetchStatus, 100) // Update 10 times per second for smooth animation
     return () => clearInterval(interval)
   }, [])
-
-  // Poll server-side stats for session time and VR distance.
-  // Server-side values avoid uint64 precision loss from QPC nanosecond subtraction in JS
-  // and survive page refreshes since data is accumulated in BanditArena's telemetry buffer.
-  useEffect(() => {
-    let mounted = true
-    const fetchStats = async () => {
-      const { data } = await getTelemetryStats()
-      if (!mounted || !data) return
-      setSessionDurationSec(data.session?.durationSec || 0)
-      setVrDistanceMeters(data.avatar?.totalDistance || 0)
-    }
-    fetchStats()
-    const interval = setInterval(fetchStats, 2000)
-    return () => { mounted = false; clearInterval(interval) }
-  }, [])
-
-  // Format session time as HH:MM:SS or MM:SS
-  const formattedSessionTime = useMemo(() => {
-    const totalSec = Math.floor(sessionDurationSec)
-    const hours = Math.floor(totalSec / 3600)
-    const minutes = Math.floor((totalSec % 3600) / 60)
-    const seconds = totalSec % 60
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-    }
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`
-  }, [sessionDurationSec])
 
   // Animation loop for tread pattern - continuous scrolling based on tread direction and speed
   // IMPORTANT: this must not restart on every telemetry poll, so it reads treadmill state from a ref
@@ -792,7 +758,7 @@ function DashboardTab() {
       const deltaTime = (currentTime - lastTimeRef.current) / 1000
       lastTimeRef.current = currentTime
 
-      const state = treadmillStateRef.current
+      const state = sessionActiveRef.current ? treadmillStateRef.current : null
       const speed = state?.treadSpeed || 0
       const dirX = state?.treadDirection?.x || 0
       const dirY = state?.treadDirection?.y || 0
@@ -804,19 +770,21 @@ function DashboardTab() {
       const svgVelX = dirX * speed
       const svgVelY = -dirY * speed
 
-      setAnimationOffset(prev => {
-        const hexScale = hexScaleRef.current
-        const tileWidth = 90 * hexScale
-        const tileHeight = 78 * hexScale
-        const pixelsPerMeter = tileWidth
-        const newX = mod(prev.x + svgVelX * pixelsPerMeter * deltaTime, tileWidth)
-        const newY = mod(prev.y + svgVelY * pixelsPerMeter * deltaTime, tileHeight)
-        return {
-          ...prev,
-          x: newX,
-          y: newY
-        }
-      })
+      if (speed > 0.001) {
+        setAnimationOffset(prev => {
+          const hexScale = hexScaleRef.current
+          const tileWidth = 90 * hexScale
+          const tileHeight = 78 * hexScale
+          const pixelsPerMeter = tileWidth
+          const newX = mod(prev.x + svgVelX * pixelsPerMeter * deltaTime, tileWidth)
+          const newY = mod(prev.y + svgVelY * pixelsPerMeter * deltaTime, tileHeight)
+          return {
+            ...prev,
+            x: newX,
+            y: newY
+          }
+        })
+      }
 
       animationRef.current = requestAnimationFrame(animate)
     }
@@ -1046,10 +1014,10 @@ function DashboardTab() {
   // User and tread use the SAME coordinate system: +X=right, +Y=forward (Bandit coords)
   // The tread should move OPPOSITE to user direction to recenter them
   const userDirectionArrow = useMemo(() => {
-    if (!userState?.userDirection || !userState?.userSpeed || !svgConfig) return null
+    if (!userDirectionVectorForUi || !userState?.userSpeed || !svgConfig) return null
 
-    const dirX = userState.userDirection.x || 0
-    const dirY = userState.userDirection.y || 0
+    const dirX = userDirectionVectorForUi.x || 0
+    const dirY = userDirectionVectorForUi.y || 0
     const speed = userState.userSpeed || 0
 
     if (speed < 0.01) return null // Don't show arrow if not moving
@@ -1074,7 +1042,7 @@ function DashboardTab() {
       endY,
       angleDeg: angleSvg * 180 / Math.PI
     }
-  }, [userState, svgConfig])
+  }, [userDirectionVectorForUi, userState?.userSpeed, svgConfig])
 
   // Calculate warning zones based on user position and movement
   // warningZone: orange - user is in outer area (40-70% from center)
@@ -1086,8 +1054,8 @@ function DashboardTab() {
 
     const posX = userState.userPosition.x || 0
     const posY = userState.userPosition.y || 0
-    const dirX = userState.userDirection?.x || 0
-    const dirY = userState.userDirection?.y || 0
+    const dirX = userDirectionVectorForUi?.x || 0
+    const dirY = userDirectionVectorForUi?.y || 0
     const speed = userState.userSpeed || 0
 
     // Calculate distance from center (in meters)
@@ -1118,7 +1086,7 @@ function DashboardTab() {
       isWarningZone: inWarningArea && !inDangerZone,
       isDangerZone: inDangerZone
     }
-  }, [userState, svgConfig])
+  }, [userState, userDirectionVectorForUi, svgConfig])
 
   // Calculate speeds for display
   const speeds = useMemo(() => {
@@ -1200,73 +1168,6 @@ function DashboardTab() {
         m: 0
       }}
     >
-      {/* Stats Panel - Top Bar with Speed Meters and Session Info */}
-      <Paper
-        elevation={2}
-        sx={{
-          borderRadius: 0,
-          px: 3,
-          py: 1.5,
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 3,
-          borderBottom: 1,
-          borderColor: 'divider',
-          flexShrink: 0,
-          background: 'linear-gradient(180deg, rgba(30,35,40,1) 0%, rgba(24,28,32,1) 100%)'
-        }}
-      >
-        {/* Left Section - Speed Meters */}
-        <Box sx={{ display: 'flex', gap: 3, flex: 1, alignItems: 'center' }}>
-          <SpeedMeter
-            label="AVATAR SPEED"
-            value={speeds.avatarSpeed}
-            maxValue={6}
-            color="#00e5ff"
-            glowColor="rgba(0,229,255,0.5)"
-          />
-          <SpeedMeter
-            label="TREAD SPEED"
-            value={speeds.treadSpeed}
-            maxValue={6}
-            color="#00e5ff"
-            glowColor="rgba(0,229,255,0.5)"
-          />
-          <SessionStat
-            label="OPENXR RUNTIME"
-            value={openxrRuntimeName}
-            color="#00e5ff"
-          />
-         
-          <SessionStat
-            label="OPENXR DRIVER"
-            value={openxrLinkHealthy === null ? 'Detecting...' : (openxrLinkHealthy ? 'Running' : 'Disabled')}
-            color={openxrLinkHealthy ? '#00d4aa' : '#ef5350'}
-          />
-          <SessionStat
-            label="VR DISTANCE"
-            value={vrDistanceMeters >= 1000
-              ? `${(vrDistanceMeters / 1000).toFixed(2)} km`
-              : `${vrDistanceMeters.toFixed(1)} m`}
-            color="#00e5ff"
-          />
-          <SessionStat
-            label="SESSION TIME"
-            value={formattedSessionTime}
-            color="#00e5ff"
-          />
-        </Box>
-
-
-        {/* Right Section - Session Stats */}
-        <Box sx={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-start' }}>
-
-        </Box>
-      </Paper>
-
       {/* Two Column Viewers */}
       <Box sx={{ display: 'flex', flexGrow: 1, minHeight: 0 }}>
         {/* Left Column - Treadmill Viewer */}
@@ -1555,17 +1456,73 @@ function DashboardTab() {
         </Box>
 
         {/* Right Column - VR Position Viewer */}
-        <VRPositionViewer userState={userState} />
+        <VRPositionViewer userState={userState} config={config} />
       </Box>
     </Box>
   )
 }
 
+function VrEventMarker({ type, x, y, size }) {
+  const r = Math.max(8, size * 1.15)
+  const label = type === 'fall' ? 'F' : 'X'
+  const testId = type === 'fall' ? 'vr-trail-fall-marker' : 'vr-trail-wall-marker'
+  return (
+    <g transform={`translate(${x}, ${y})`} data-testid={testId}>
+      <circle
+        cx={0}
+        cy={0}
+        r={r}
+        fill="#c62828"
+        stroke="#ffffff"
+        strokeWidth={Math.max(1.25, r / 8)}
+      />
+      {type === 'fall' ? (
+        <text
+          x={0}
+          y={0}
+          fill="#ffffff"
+          fontSize={r * 1.05}
+          fontFamily="Montserrat, sans-serif"
+          fontWeight="700"
+          textAnchor="middle"
+          dominantBaseline="central"
+        >
+          {label}
+        </text>
+      ) : (
+        <>
+          <line
+            x1={-r * 0.38}
+            y1={-r * 0.38}
+            x2={r * 0.38}
+            y2={r * 0.38}
+            stroke="#ffffff"
+            strokeWidth={Math.max(1.75, r / 5)}
+            strokeLinecap="round"
+          />
+          <line
+            x1={r * 0.38}
+            y1={-r * 0.38}
+            x2={-r * 0.38}
+            y2={r * 0.38}
+            stroke="#ffffff"
+            strokeWidth={Math.max(1.75, r / 5)}
+            strokeLinecap="round"
+          />
+        </>
+      )}
+    </g>
+  )
+}
+
 // VR Position Viewer Component - shows unbounded position with movement trail
-function VRPositionViewer({ userState }) {
+function VRPositionViewer({ userState, config }) {
   const containerRef = useRef(null)
   const [dimensions, setDimensions] = useState({ width: 600, height: 600 })
-  const [positionHistory, setPositionHistory] = useState([]) // Array of {x, y, timestamp}
+  const [positionHistory, setPositionHistory] = useState([]) // Array of {x, y, timestamp, inWarning}
+  const [eventMarkers, setEventMarkers] = useState([]) // {type: 'wall'|'fall', x, y, timestamp}
+  const lastSafetyRef = useRef({ atWall: false, fallen: false })
+  const boundaryRadii = useMemo(() => safetyBoundaryRadii(config), [config])
 
   const uiScale = useMemo(() => {
     const size = Math.min(dimensions.width, dimensions.height)
@@ -1597,28 +1554,35 @@ function VRPositionViewer({ userState }) {
     return { x, y }
   }, [userState])
 
-  // Update position history when unbounded position changes
+  // Update position history and safety markers when telemetry changes
   useEffect(() => {
     const now = Date.now()
-    const newPoint = { x: unboundedPos.x, y: unboundedPos.y, timestamp: now }
+    const dist = userState?.distanceFromCenter
+      ?? Math.hypot(userState?.userPosition?.x || 0, userState?.userPosition?.y || 0)
+    const inWarning = dist >= boundaryRadii.warning
+    const atWall = dist >= boundaryRadii.violation
+    const fallen = userState?.userStatus === USER_STATUS_FALL
+    const newPoint = { x: unboundedPos.x, y: unboundedPos.y, timestamp: now, inWarning }
 
     setPositionHistory(prev => {
-      // Add new point
+      const last = prev[prev.length - 1]
+      const moved = !last
+        || Math.hypot(newPoint.x - last.x, newPoint.y - last.y) > 0.001
+        || last.inWarning !== inWarning
+      if (!moved) {
+        return prev
+      }
       const updated = [...prev, newPoint]
 
-      // Remove points older than 3 minutes
       const cutoff = now - POSITION_HISTORY_MAX_DURATION_MS
       const filtered = updated.filter(p => p.timestamp >= cutoff)
 
-      // Limit to reasonable number of points (sample every ~100ms = ~1800 points for 3 min)
-      // If we have too many points, keep every Nth point
       if (filtered.length > 2000) {
         const sampled = []
         const step = Math.ceil(filtered.length / 1500)
         for (let i = 0; i < filtered.length; i += step) {
           sampled.push(filtered[i])
         }
-        // Always include the latest point
         if (sampled[sampled.length - 1] !== filtered[filtered.length - 1]) {
           sampled.push(filtered[filtered.length - 1])
         }
@@ -1627,7 +1591,34 @@ function VRPositionViewer({ userState }) {
 
       return filtered
     })
-  }, [unboundedPos.x, unboundedPos.y])
+
+    const prevSafety = lastSafetyRef.current
+    const nextMarkers = []
+    if (atWall && !prevSafety.atWall) {
+      nextMarkers.push({ type: 'wall', x: unboundedPos.x, y: unboundedPos.y, timestamp: now })
+    }
+    if (fallen && !prevSafety.fallen) {
+      nextMarkers.push({ type: 'fall', x: unboundedPos.x, y: unboundedPos.y, timestamp: now })
+    }
+    lastSafetyRef.current = { atWall, fallen }
+    if (nextMarkers.length > 0) {
+      setEventMarkers(prev => {
+        const cutoff = now - POSITION_HISTORY_MAX_DURATION_MS
+        return [...prev.filter(m => m.timestamp >= cutoff), ...nextMarkers]
+      })
+    } else {
+      setEventMarkers(prev => prev.filter(m => m.timestamp >= now - POSITION_HISTORY_MAX_DURATION_MS))
+    }
+  }, [
+    unboundedPos.x,
+    unboundedPos.y,
+    userState?.distanceFromCenter,
+    userState?.userPosition?.x,
+    userState?.userPosition?.y,
+    userState?.userStatus,
+    boundaryRadii.warning,
+    boundaryRadii.violation,
+  ])
 
   // Calculate bounding box of all positions in history
   const bounds = useMemo(() => {
@@ -1704,16 +1695,33 @@ function VRPositionViewer({ userState }) {
     return worldToSvg(unboundedPos.x, unboundedPos.y)
   }, [unboundedPos, worldToSvg])
 
-  // Generate path for position history
-  const historyPath = useMemo(() => {
-    if (positionHistory.length < 2) return ''
+  // Generate colored trail segments (cyan in the safe area, yellow in the warning/wall area)
+  const trailSegments = useMemo(() => {
+    if (positionHistory.length < 2) return []
 
-    const points = positionHistory.map(p => worldToSvg(p.x, p.y))
-    let d = `M ${points[0].x} ${points[0].y}`
-    for (let i = 1; i < points.length; i++) {
-      d += ` L ${points[i].x} ${points[i].y}`
+    const segments = []
+    let current = {
+      inWarning: Boolean(positionHistory[0].inWarning),
+      points: [positionHistory[0]],
     }
-    return d
+    for (let i = 1; i < positionHistory.length; i++) {
+      const p = positionHistory[i]
+      const warn = Boolean(p.inWarning)
+      if (warn === current.inWarning) {
+        current.points.push(p)
+      } else {
+        current.points.push(p)
+        segments.push(current)
+        current = { inWarning: warn, points: [p] }
+      }
+    }
+    segments.push(current)
+    return segments
+      .filter((seg) => seg.points.length >= 2)
+      .map((seg) => ({
+        inWarning: seg.inWarning,
+        d: trailPathFromPoints(seg.points, worldToSvg),
+      }))
   }, [positionHistory, worldToSvg])
 
   // Generate grid lines - dynamically based on view size
@@ -1782,6 +1790,7 @@ function VRPositionViewer({ userState }) {
         width={dimensions.width}
         height={dimensions.height}
         viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
+        data-testid="dashboard-vr-position"
       >
         {/* Background */}
         <rect width="100%" height="100%" fill="#181c20" />
@@ -1839,18 +1848,33 @@ function VRPositionViewer({ userState }) {
           </g>
         ))}
 
-        {/* Movement history trail line */}
-        {historyPath && (
+        {/* Movement history trail: yellow in boundary warning, cyan otherwise */}
+        {trailSegments.map((seg, i) => (
           <path
-            d={historyPath}
+            key={`trail-${i}`}
+            d={seg.d}
             fill="none"
-            stroke="#4db6c4"
+            stroke={seg.inWarning ? TRAIL_COLOR_WARNING : TRAIL_COLOR_SAFE}
             strokeWidth={Math.max(1.5, iconSize / 5)}
             strokeLinecap="round"
             strokeLinejoin="round"
-            opacity="0.6"
+            opacity="0.75"
+            data-testid={seg.inWarning ? 'vr-trail-warning' : 'vr-trail-safe'}
           />
-        )}
+        ))}
+
+        {eventMarkers.map((marker) => {
+          const svg = worldToSvg(marker.x, marker.y)
+          return (
+            <VrEventMarker
+              key={`${marker.type}-${marker.timestamp}`}
+              type={marker.type}
+              x={svg.x}
+              y={svg.y}
+              size={iconSize}
+            />
+          )
+        })}
 
         {/* User position indicator - blue circle at front of line, no arrow */}
         <g transform={`translate(${userSvgPos.x}, ${userSvgPos.y})`}>
