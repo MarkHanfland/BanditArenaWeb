@@ -64,20 +64,23 @@ test('header session start and end for an enrolled player', async ({ page }) => 
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
 });
 
-test('header session start stays disabled without high-confidence skeleton', async ({ page }) => {
+test('header session start is enabled once player and media are selected', async ({ page }) => {
   await mockConsoleApis(page, createCloudFixture(), {
     trackingReady: false,
     trackingConfidence: 0.1,
   });
   await signInAsVenueAdmin(page);
 
-  await expect(page.getByTestId('header-session-tracking-blocked')).toHaveText(
-    'Waiting for high-confidence skeleton tracking',
-  );
   await expect(page.getByTestId('header-session-start')).toBeDisabled();
+  await expect(page.getByTestId('session-status-notice')).toHaveCount(0);
 
   await selectEnrolledPlayer(page, /Alex Runner/, { userId: 'user-demo-001' });
-  await expect(page.getByTestId('header-session-start')).toBeDisabled();
+  await expect(page.getByTestId('header-media-select')).toHaveValue(/Alpine Trail/);
+  await expect(page.getByTestId('header-session-start')).toBeEnabled();
+
+  await page.getByTestId('header-session-start').click();
+  await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
+  await expect(page.getByTestId('header-session-end')).toBeVisible();
 });
 
 test('player select dialog searches by last name and shows scheduled filter', async ({ page }) => {

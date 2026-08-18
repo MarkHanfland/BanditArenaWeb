@@ -77,8 +77,6 @@ export default function PlayerSessionControls({
     mediaOptions,
     selectedMediaId,
     setSelectedMediaId,
-    selectedMediaIsTest,
-    trackingReady,
     busy,
     sessionActive,
     handleStart,
@@ -93,9 +91,6 @@ export default function PlayerSessionControls({
   const mediaDialogTestId = compact ? 'header-media-select' : 'media-select'
   const showPlayer = part === 'all' || part === 'player'
   const showAction = part === 'all' || part === 'action'
-
-  // Test media starts CameraSimulator on session start, so tracking is not required up front.
-  const startBlockedByTracking = !trackingReady && !selectedMediaIsTest
 
   const playerValue = sessionActive
     ? (session?.displayName || session?.userId || '')
@@ -131,7 +126,7 @@ export default function PlayerSessionControls({
       variant="outlined"
       size="small"
       onClick={handleStart}
-      disabled={busy || !selected?.userId || !selectedMediaId || startBlockedByTracking}
+      disabled={busy || !selected?.userId || !selectedMediaId}
       data-testid={compact ? 'header-session-start' : 'session-start'}
       sx={startSessionButtonSx}
     >
