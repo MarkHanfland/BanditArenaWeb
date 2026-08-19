@@ -24,6 +24,7 @@ import {
 import PageScaffold from '../../components/shared/PageScaffold'
 import {
   createMediaAssetUploadToken,
+  createContentUploadToken,
   deleteMedia,
   listMedia,
   publishMedia,
@@ -40,6 +41,7 @@ const emptyDraft = {
   tags: '',
   image: '',
   demoVideo: '',
+  objectKey: '',
   pricePerMinute: 0.1,
   testMedia: false,
   simulationMode: 'deterministic',
@@ -81,6 +83,35 @@ async function uploadAsset(mediaId, assetType, file) {
   return { url: dataUrl, objectKey: data?.objectKey || null }
 }
 
+/** SW-057: mint content upload-token and PUT the VR package (.pak) to private S3. */
+async function uploadContentPackage(mediaId, file, version) {
+  const { data, error } = await createContentUploadToken(mediaId, {
+    version: version || 1,
+    fileName: file.name,
+  })
+  if (error) throw new Error(error)
+  if (!data?.objectKey) throw new Error('Upload token missing objectKey')
+
+  if (data.uploadUrl && data.source === 's3') {
+    const put = await fetch(data.uploadUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': data.contentType || 'application/octet-stream' },
+    })
+    if (!put.ok) {
+      throw new Error(`Content package upload failed (${put.status})`)
+    }
+  } else if (data.source !== 'placeholder') {
+    throw new Error('Content package storage is not configured')
+  }
+
+  return {
+    objectKey: data.objectKey,
+    version: data.version || version || 1,
+    source: data.source || 'unknown',
+  }
+}
+
 export default function MediaPage() {
   const { selectedMediaId, setSelectedMediaId, sessionActive, loadMedia: refreshSessionMedia } =
     usePlayerSession()
@@ -96,6 +127,7 @@ export default function MediaPage() {
   const [uploading, setUploading] = useState('')
   const imageInputRef = useRef(null)
   const videoInputRef = useRef(null)
+  const packageInputRef = useRef(null)
 
   const loadCatalog = useCallback(async () => {
     setLoading(true)
@@ -128,6 +160,7 @@ export default function MediaPage() {
       tags: Array.isArray(item.tags) ? item.tags.join(', ') : '',
       image: item.image || item.cover || '',
       demoVideo: item.demoVideo || '',
+      objectKey: item.objectKey || '',
       pricePerMinute: item.pricePerMinute ?? 0.1,
       testMedia: Boolean(item.testMedia),
       simulationMode: item.simulationMode || 'deterministic',
@@ -147,6 +180,7 @@ export default function MediaPage() {
       .filter(Boolean),
     image: draft.image || undefined,
     demoVideo: draft.demoVideo || undefined,
+    objectKey: draft.objectKey || undefined,
     pricePerMinute: draft.pricePerMinute,
     testMedia: draft.testMedia,
     simulationMode: draft.testMedia ? draft.simulationMode : undefined,
@@ -225,6 +259,51 @@ export default function MediaPage() {
     }
   }
 
+  const handlePackageUpload = async (file) => {
+    if (!file) return
+    setUploading('package')
+    setMessage('')
+    try {
+      let mediaId = editingId
+      if (!mediaId) {
+        if (!draft.name.trim()) {
+          throw new Error('Save a name first, or create the title before uploading a package')
+        }
+        const created = await publishMedia({
+          ...buildPayload(),
+          published: draft.published,
+        })
+        if (created.error) throw new Error(created.error)
+        mediaId = created.data?.media?.mediaId
+        setEditingId(mediaId)
+      }
+      const uploaded = await uploadContentPackage(mediaId, file, Number(draft.version) || 1)
+      const updated = await updateMedia(mediaId, {
+        objectKey: uploaded.objectKey,
+        version: uploaded.version,
+      })
+      if (updated.error) throw new Error(updated.error)
+      setDraft((prev) => ({
+        ...prev,
+        objectKey: uploaded.objectKey,
+        version: uploaded.version,
+      }))
+      setMessageSeverity('success')
+      setMessage(
+        uploaded.source === 's3'
+          ? `Content package uploaded (${uploaded.objectKey})`
+          : `Package key registered (${uploaded.objectKey}); set BANDIT_CONTENT_BUCKET for S3 PutObject`,
+      )
+      await loadCatalog()
+      if (refreshSessionMedia) await refreshSessionMedia()
+    } catch (err) {
+      setMessageSeverity('error')
+      setMessage(err.message || 'Package upload failed')
+    } finally {
+      setUploading('')
+    }
+  }
+
   const handleUnpublish = async (item) => {
     const { error: apiError } = await unpublishMedia(item.mediaId)
     if (apiError) {
@@ -272,7 +351,7 @@ export default function MediaPage() {
     <PageScaffold
       title="Media"
       category="Cloud"
-      description="VR media catalog — create, edit, publish, and upload cover images and demo videos."
+      description="VR media catalog — create, edit, publish, upload cover/demo assets, and content packages."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
@@ -470,6 +549,35 @@ export default function MediaPage() {
                   const file = e.target.files?.[0]
                   e.target.value = ''
                   handleUpload('demoVideo', file)
+                }}
+              />
+            </Stack>
+            <TextField
+              label="Content package object key"
+              fullWidth
+              value={draft.objectKey}
+              onChange={(e) => setDraft({ ...draft, objectKey: e.target.value })}
+              helperText="Private S3 key for the VR package (set automatically on upload)"
+            />
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={Boolean(uploading)}
+                onClick={() => packageInputRef.current?.click()}
+                data-testid="upload-content-package"
+              >
+                {uploading === 'package' ? 'Uploading…' : 'Upload content package'}
+              </Button>
+              <input
+                ref={packageInputRef}
+                type="file"
+                accept=".pak,.zip,application/octet-stream"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  handlePackageUpload(file)
                 }}
               />
             </Stack>

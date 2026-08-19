@@ -67,13 +67,13 @@ test('content publish flow adds a VR title', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-content').click();
-  await expect(page.getByRole('heading', { name: 'Content' })).toBeVisible();
-  await page.getByTestId('publish-content').click();
-  await page.getByLabel('Title').fill('Desert Dash');
+  await page.getByTestId('menu-media').click();
+  await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
+  await page.getByTestId('create-media').click();
+  await page.getByLabel('Name').fill('Desert Dash');
   await page.getByLabel('Description').fill('A demo VR trail');
-  await page.getByRole('button', { name: 'Publish' }).click();
-  await expect(page.getByText('Published Desert Dash')).toBeVisible();
+  await page.getByRole('button', { name: 'Create' }).click();
+  await expect(page.getByText(/Created Desert Dash|Desert Dash/)).toBeVisible();
 });
 
 test('fleet register flow provisions a device', async ({ page }) => {
@@ -127,12 +127,43 @@ test('billing issue and revoke license', async ({ page }) => {
   await signInAsVenueAdmin(page);
 
   await page.getByTestId('menu-billing').click();
-  await expect(page.getByRole('heading', { name: 'Billing' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Commerce' })).toBeVisible();
+  await page.getByTestId('commerce-tab-licensing').click();
   await page.getByTestId('issue-license').click();
   await page.getByTestId('issue-license-submit').click();
   await expect(page.getByTestId('billing-message')).toContainText('Issued lic-new-2');
   await page.getByTestId('revoke-lic-demo-001').click();
   await expect(page.getByTestId('billing-message')).toContainText('Revoked lic-demo-001');
+});
+
+test('commerce offerings BOM and revenue tabs', async ({ page }) => {
+  await mockCloudApi(page);
+  await signInAsVenueAdmin(page);
+
+  await page.getByTestId('menu-billing').click();
+  await expect(page.getByTestId('commerce-offerings-table')).toBeVisible();
+  await expect(page.getByText('BA-CORE-BUNDLE')).toBeVisible();
+  await expect(page.getByText('BA-PRO-BUNDLE')).toBeVisible();
+
+  await page.getByTestId('commerce-tab-models').click();
+  await expect(page.getByTestId('commerce-bom-table')).toBeVisible();
+  await expect(page.getByText('hw-compute')).toBeVisible();
+
+  await page.getByTestId('commerce-tab-revenue').click();
+  await expect(page.getByTestId('commerce-revenue')).toBeVisible();
+  await expect(page.getByTestId('revenue-total')).toContainText('$63,488');
+});
+
+test('commerce spare order submits for a device', async ({ page }) => {
+  await mockCloudApi(page);
+  await signInAsVenueAdmin(page);
+
+  await page.getByTestId('menu-billing').click();
+  await page.getByTestId('commerce-create-order').click();
+  await page.getByTestId('order-sku').click();
+  await page.getByRole('option', { name: /BA-SPARE-MEMBRANE/ }).click();
+  await page.getByTestId('order-submit').click();
+  await expect(page.getByTestId('billing-message')).toContainText('Order ord-');
 });
 
 test('analytics page shows summary cards', async ({ page }) => {
@@ -150,10 +181,25 @@ test('maintenance records an event for the selected device', async ({ page }) =>
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-maintenance').click();
-  await expect(page.getByRole('heading', { name: 'Maintenance' })).toBeVisible();
+  await page.getByTestId('menu-fleet').click();
+  await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
+  await page.getByTestId('fleet-row-i1').click();
+  await page.getByTestId('fleet-tab-maintenance').click();
   await page.getByTestId('record-maintenance').click();
   await page.getByLabel('Description').fill('Belt inspection');
   await page.getByTestId('maintenance-submit').click();
   await expect(page.getByText('Belt inspection')).toBeVisible();
+});
+
+test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) => {
+  await mockCloudApi(page);
+  await signInAsVenueAdmin(page);
+
+  await page.getByTestId('menu-fleet').click();
+  await expect(page.getByTestId('fleet-map')).toBeVisible();
+  await expect(page.getByText('Neon Circuit')).toBeVisible();
+  await page.getByTestId('fleet-fleet-horizon-parks').click();
+  await expect(page.getByText('Horizon Parks')).toBeVisible();
+  await page.getByTestId('fleet-tab-financial').click();
+  await expect(page.getByTestId('device-financials')).toBeVisible();
 });

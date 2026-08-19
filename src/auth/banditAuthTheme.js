@@ -48,6 +48,10 @@ export const banditAuthTheme = createTheme({
           _hover: {
             backgroundColor: { value: '{colors.brand.primary.80}' },
           },
+          _disabled: {
+            backgroundColor: { value: 'rgba(77, 182, 196, 0.35)' },
+            color: { value: 'rgba(255, 255, 255, 0.85)' },
+          },
         },
         link: {
           color: { value: '{colors.brand.primary.80}' },

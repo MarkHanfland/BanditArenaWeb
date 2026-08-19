@@ -10,6 +10,7 @@ import {
 import MockLoginShell from './auth/MockLoginShell'
 import { isE2eAuthBypass } from './auth/e2eAuth'
 import Dashboard from './AppDashboard'
+import ConsoleErrorBoundary from './components/shared/ConsoleErrorBoundary'
 
 function LocalBypassGate() {
   const { isAuthenticated, login } = useAuth()
@@ -35,7 +36,9 @@ function CognitoApp() {
   return (
     <CognitoAuthRoot>
       <AuthProvider>
-        <Dashboard />
+        <ConsoleErrorBoundary>
+          <Dashboard />
+        </ConsoleErrorBoundary>
       </AuthProvider>
     </CognitoAuthRoot>
   )
