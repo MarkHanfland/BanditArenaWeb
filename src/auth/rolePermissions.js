@@ -10,8 +10,8 @@ export const ROLE_CLOUD_ADMIN = 'cloud-admin'
 const DEVICE_MENU_IDS = ['dashboard', 'user', 'treadmill', 'services', 'events', 'config']
 
 /** Menus for purchase / install / operate lifecycle by Cognito role. */
-const ORG_AND_FLEET = ['organizations', 'fleet', 'staff', 'maintenance']
-const VENUE_OPS = ['media', 'users', 'reservations', 'usage', ...ORG_AND_FLEET]
+const ORG_AND_FLEET = ['organizations', 'fleet', 'staff']
+const VENUE_OPS = ['media', 'users', 'reservations', 'usage', 'billing', ...ORG_AND_FLEET]
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'user', 'treadmill', 'events'],
@@ -24,11 +24,11 @@ export const ROLE_PERMISSIONS = {
     'config',
     'media',
     'usage',
-    'maintenance',
+    'fleet',
   ],
   [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
-  [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS, 'billing'],
-  [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS, 'billing'],
+  [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
+  [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
 }
 
 export function extractGroupsFromUser(user) {

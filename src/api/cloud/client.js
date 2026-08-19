@@ -223,6 +223,14 @@ export async function createMediaAssetUploadToken(mediaId, payload) {
 
 
 
+export async function createContentUploadToken(mediaId, payload = {}) {
+
+  return request(() => cloudApi.post(`/media/${mediaId}/upload-token`, payload))
+
+}
+
+
+
 export async function listProducts() {
 
   return request(() => cloudApi.get('/products'))
@@ -407,6 +415,38 @@ export async function bookReservation(payload) {
 
 
 
+export async function createReservationSlot(payload) {
+
+  return request(() => cloudApi.post('/reservations/slots', payload))
+
+}
+
+
+
+export async function cancelReservation(slotId, payload = {}) {
+
+  return request(() => cloudApi.post(`/reservations/${slotId}/cancel`, payload))
+
+}
+
+
+
+export async function checkInReservation(slotId, payload = {}) {
+
+  return request(() => cloudApi.post(`/reservations/${slotId}/check-in`, payload))
+
+}
+
+
+
+export async function markReservationNoShow(slotId, payload = {}) {
+
+  return request(() => cloudApi.post(`/reservations/${slotId}/no-show`, payload))
+
+}
+
+
+
 export async function sendNotification(payload) {
 
   return request(() => cloudApi.post('/notifications/send', payload))
@@ -562,6 +602,118 @@ export async function listLicensePlans() {
 export async function renewLicense(licenseId, payload = {}) {
 
   return request(() => cloudApi.post(`/licenses/${licenseId}/renew`, payload))
+
+}
+
+
+
+export async function listCommerceOfferings(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.offeringType) params.set('offeringType', query.offeringType)
+
+  if (query.stream) params.set('stream', query.stream)
+
+  const qs = params.toString()
+
+  return request(() => cloudApi.get(`/commerce/catalog${qs ? `?${qs}` : ''}`))
+
+}
+
+
+
+export async function checkCommerceCompatibility(payload) {
+
+  return request(() => cloudApi.post('/commerce/compatibility', payload))
+
+}
+
+
+
+export async function listCommerceOrders() {
+
+  return request(() => cloudApi.get('/commerce/orders'))
+
+}
+
+
+
+export async function createCommerceOrder(payload) {
+
+  return request(() => cloudApi.post('/commerce/orders', payload))
+
+}
+
+
+
+export async function getRevenueReport(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.from) params.set('from', query.from)
+
+  if (query.to) params.set('to', query.to)
+
+  const qs = params.toString()
+
+  return request(() => cloudApi.get(`/billing/revenue-report${qs ? `?${qs}` : ''}`))
+
+}
+
+
+
+export async function listCatalogModels() {
+
+  return request(() => cloudApi.get('/catalog/models'))
+
+}
+
+
+
+export async function listSupportTickets(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.deviceId) params.set('deviceId', query.deviceId)
+
+  if (query.status) params.set('status', query.status)
+
+  const qs = params.toString()
+
+  return request(() => cloudApi.get(`/support/tickets${qs ? `?${qs}` : ''}`))
+
+}
+
+
+
+export async function createSupportTicket(payload) {
+
+  return request(() => cloudApi.post('/support/tickets', payload))
+
+}
+
+
+
+export async function listDiagnosticCommands(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.deviceId) params.set('deviceId', query.deviceId)
+
+  if (query.status) params.set('status', query.status)
+
+  const qs = params.toString()
+
+  return request(() => cloudApi.get(`/support/diagnostics/commands${qs ? `?${qs}` : ''}`))
+
+}
+
+
+
+export async function queueDiagnosticCommand(payload) {
+
+  return request(() => cloudApi.post('/support/diagnostics/commands', payload))
 
 }
 

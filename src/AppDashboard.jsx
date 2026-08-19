@@ -29,7 +29,6 @@ import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import BusinessIcon from '@mui/icons-material/Business'
 import InsightsIcon from '@mui/icons-material/Insights'
 import HubIcon from '@mui/icons-material/Hub'
-import BuildIcon from '@mui/icons-material/Build'
 import MovieIcon from '@mui/icons-material/Movie'
 import EventIcon from '@mui/icons-material/Event'
 
@@ -46,7 +45,6 @@ import StaffPage from './pages/cloud/StaffPage'
 import OrganizationsPage from './pages/cloud/OrganizationsPage'
 import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
-import MaintenancePage from './pages/cloud/MaintenancePage'
 import ReservationsPage from './pages/cloud/ReservationsPage'
 
 import { useAuth } from './auth/useAuth'
@@ -54,6 +52,7 @@ import { filterMenuGroups } from './auth/rolePermissions'
 import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
 import DeviceStatusBand from './components/shared/DeviceStatusBand'
+import ConsoleErrorBoundary from './components/shared/ConsoleErrorBoundary'
 import { PlayerSessionProvider, SESSION_PHASE, usePlayerSession } from './session/PlayerSessionContext'
 import { isCloudDeployment } from './config/runtime'
 import {
@@ -83,10 +82,9 @@ const CLOUD_ITEMS = [
   { id: 'reservations', label: 'Reservations', icon: <EventIcon />, panel: () => <ReservationsPage /> },
   { id: 'staff', label: 'Staff', icon: <ManageAccountsIcon />, panel: () => <StaffPage /> },
   { id: 'organizations', label: 'Organizations', icon: <BusinessIcon />, panel: () => <OrganizationsPage /> },
-  { id: 'billing', label: 'Billing', icon: <PaymentsIcon />, panel: () => <BillingPage /> },
+  { id: 'billing', label: 'Commerce', icon: <PaymentsIcon />, panel: () => <BillingPage /> },
   { id: 'usage', label: 'Analytics', icon: <InsightsIcon />, panel: () => <UsagePage /> },
   { id: 'fleet', label: 'Fleet', icon: <HubIcon />, panel: () => <FleetPage /> },
-  { id: 'maintenance', label: 'Maintenance', icon: <BuildIcon />, panel: () => <MaintenancePage /> },
 ]
 
 const MENU_GROUPS = [
@@ -369,7 +367,10 @@ function DashboardView({ deviceOnline }) {
             borderColor: 'divider',
             backgroundColor: 'background.paper',
             width: 280,
+            minWidth: 260,
+            flexShrink: 0,
             overflowY: 'auto',
+            overflowX: 'hidden',
           }}
         >
           {visibleMenuGroups.map((group, groupIndex) => {
@@ -444,11 +445,13 @@ function DashboardView({ deviceOnline }) {
             noPadding={activeItem?.id === 'dashboard'}
             scrollable={activeItem?.id !== 'dashboard'}
           >
-            {isDeviceTab && deviceOnline === false ? (
-              <DeviceOfflinePanel />
-            ) : (
-              activeItem?.panel({ treadmillState })
-            )}
+            <ConsoleErrorBoundary key={activeItem?.id || 'panel'}>
+              {isDeviceTab && deviceOnline === false ? (
+                <DeviceOfflinePanel />
+              ) : (
+                activeItem?.panel({ treadmillState })
+              )}
+            </ConsoleErrorBoundary>
           </TabPanel>
         </Box>
       </Box>

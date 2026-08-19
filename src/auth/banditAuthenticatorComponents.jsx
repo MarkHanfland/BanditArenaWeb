@@ -11,12 +11,13 @@ function RememberUsernameToggle() {
 
   return (
     <Flex
+      className="bandit-remember-username"
       alignItems="center"
       justifyContent="center"
       gap={tokens.space.xs}
       padding={`${tokens.space.xs} 0 ${tokens.space.xxs} 0`}
       as="label"
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', flexDirection: 'row' }}
     >
       <input
         type="checkbox"
@@ -27,6 +28,7 @@ function RememberUsernameToggle() {
           setChecked(next)
           setPreferRememberUsername(next)
         }}
+        style={{ margin: 0, flexShrink: 0 }}
       />
       <Text fontSize={tokens.fontSizes.small} color={tokens.colors.font.secondary}>
         Remember username

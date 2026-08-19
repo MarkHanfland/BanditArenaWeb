@@ -99,6 +99,10 @@ export function createCloudFixture() {
   const maintenance: Record<string, Array<Record<string, unknown>>> = {
     i1: [],
   };
+  const tickets: Array<Record<string, unknown>> = [];
+  const diagCommands: Array<Record<string, unknown>> = [];
+  const orders: Array<Record<string, unknown>> = [];
+  const offerings: Array<Record<string, unknown>> = [];
 
   return {
     tenant: demoTenant,
@@ -113,6 +117,10 @@ export function createCloudFixture() {
     media,
     instances,
     maintenance,
+    tickets,
+    diagCommands,
+    orders,
+    offerings,
   };
 }
 
@@ -338,7 +346,7 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         type: body.type,
         description: body.description,
         performedAt: new Date().toISOString(),
-        componentIds: body.componentId ? [body.componentId] : [],
+        componentIds: body.componentIds || (body.componentId ? [body.componentId] : []),
       };
       fixture.maintenance[id] = [...(fixture.maintenance[id] || []), record];
       return json({ record, message: 'Maintenance recorded' }, 201);
@@ -368,6 +376,156 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path === '/notifications/send') {
       return json({ notificationId: 'n1', status: 'sent' }, 202);
+    }
+    if (path === '/support/tickets' && method === 'GET') {
+      return json({ tickets: fixture.tickets || [], message: 'Support tickets' });
+    }
+    if (path === '/support/tickets' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const ticket = {
+        ticketId: `ticket-${Date.now()}`,
+        subject: body.subject,
+        status: 'open',
+        deviceId: body.deviceId || null,
+      };
+      fixture.tickets = [...(fixture.tickets || []), ticket];
+      return json({ ticket, message: 'Support ticket created' }, 201);
+    }
+    if (path === '/support/diagnostics/commands' && method === 'GET') {
+      return json({ commands: fixture.diagCommands || [], message: 'Diagnostic commands' });
+    }
+    if (path === '/support/diagnostics/commands' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const command = {
+        commandId: `cmd-${Date.now()}`,
+        deviceId: body.deviceId,
+        command: body.command,
+        status: 'queued',
+      };
+      fixture.diagCommands = [...(fixture.diagCommands || []), command];
+      return json({ command, message: 'Diagnostic command queued' }, 202);
+    }
+    if (path === '/commerce/catalog' && method === 'GET') {
+      return json({
+        offerings: fixture.offerings || [
+          {
+            skuId: 'BA-CORE-BUNDLE',
+            offeringType: 'primary_system',
+            name: 'Bandit Arena Core',
+            stream: 'hardware',
+            unitPriceUsd: 25000,
+            productId: 'bandit-arena-core',
+          },
+          {
+            skuId: 'BA-PRO-BUNDLE',
+            offeringType: 'primary_system',
+            name: 'Bandit Arena Pro',
+            stream: 'hardware',
+            unitPriceUsd: 32000,
+            productId: 'bandit-arena-pro',
+          },
+          {
+            skuId: 'BA-SPARE-MEMBRANE',
+            offeringType: 'spare',
+            name: 'Replacement tread membrane',
+            stream: 'parts',
+            unitPriceUsd: 1600,
+            componentId: 'hw-membrane',
+            compatibleProductIds: ['product-demo-treadmill', 'bandit-arena-core', 'bandit-arena-pro'],
+          },
+          {
+            skuId: 'BA-ADDON-DOME',
+            offeringType: 'addon',
+            name: 'Projection dome add-on',
+            stream: 'hardware',
+            unitPriceUsd: 8500,
+            compatibleProductIds: ['bandit-arena-pro'],
+            requiresFeatures: ['dome_capable'],
+          },
+        ],
+        message: 'Commerce offerings',
+      });
+    }
+    if (path === '/commerce/compatibility' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const compatible =
+        body.skuId !== 'BA-ADDON-DOME' || body.productId === 'bandit-arena-pro';
+      return json({
+        compatible,
+        reasons: compatible ? [] : ['SKU not compatible with model'],
+        message: compatible ? 'Offering compatible' : 'Offering not compatible',
+      });
+    }
+    if (path === '/commerce/orders' && method === 'GET') {
+      return json({ orders: fixture.orders || [], message: 'Commerce orders' });
+    }
+    if (path === '/commerce/orders' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const line = (body.lines || [])[0] || {};
+      if (line.skuId === 'BA-ADDON-DOME' && line.instanceId === 'i1') {
+        return json(
+          { error: 'SKU not compatible with model', code: 'OFFERING_INCOMPATIBLE', reasons: ['SKU not compatible with model'] },
+          409,
+        );
+      }
+      const order = {
+        orderId: `ord-${Date.now()}`,
+        status: 'submitted',
+        stream: 'parts',
+        totalUsd: 1600,
+        lines: body.lines || [],
+      };
+      fixture.orders = [...(fixture.orders || []), order];
+      return json({ order, message: 'Order created' }, 201);
+    }
+    if (path === '/billing/revenue-report' && method === 'GET') {
+      return json({
+        streams: {
+          hardware: 57000,
+          maintenance: 2500,
+          license: 2388,
+          content: 0,
+          royalty: 0,
+          parts: 1600,
+          placement: 0,
+        },
+        totalUsd: 63488,
+        orderCount: 5,
+        message: 'Revenue report',
+      });
+    }
+    if (path === '/catalog/models' && method === 'GET') {
+      return json({
+        products: [
+          { productId: 'bandit-arena-core', name: 'Bandit Arena Core' },
+          { productId: 'bandit-arena-pro', name: 'Bandit Arena Pro' },
+          { productId: 'product-demo-treadmill', name: 'Alpha lab' },
+        ],
+        message: 'Treadmill models',
+      });
+    }
+    if (path.match(/^\/products\/[^/]+\/inventory-preset$/) && method === 'GET') {
+      const id = path.split('/')[2];
+      return json({
+        product: { productId: id },
+        inventory: [
+          {
+            componentId: 'hw-compute',
+            category: 'hardware',
+            name: 'On-device compute',
+            partNumber: 'BA-COMPUTE-MINI',
+            fieldReplaceable: true,
+          },
+          {
+            componentId: 'cfg-tread-diameter',
+            category: 'configuration',
+            name: 'Tread diameter',
+            configValue: id.includes('pro') ? '4.2' : '2.9',
+            fieldReplaceable: false,
+          },
+        ],
+        message: 'Model inventory preset',
+      });
     }
     if (path === '/licenses' && method === 'GET') {
       return json({ licenses: fixture.licenses, message: 'Licenses' });

@@ -8,7 +8,10 @@
   width: 100%;
 }
 
-.bandit-auth-shell [data-amplify-authenticator] .amplify-flex {
+/* Stack form sections vertically — do NOT force every Amplify Flex to column
+   (that breaks password show/hide and remember-username row layouts). */
+.bandit-auth-shell [data-amplify-authenticator] form > .amplify-flex,
+.bandit-auth-shell [data-amplify-authenticator] [data-amplify-router-content] > .amplify-flex {
   flex-direction: column;
   align-items: center;
 }
@@ -21,6 +24,25 @@
   max-width: 300px;
 }
 
+/* Keep password input and visibility (eye) control on one row */
+.bandit-auth-shell [data-amplify-authenticator] .amplify-passwordfield .amplify-field-group,
+.bandit-auth-shell [data-amplify-authenticator] .amplify-field-group--horizontal {
+  flex-direction: row;
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-field-group__outer-end {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+}
+
+.bandit-auth-shell [data-amplify-authenticator] .amplify-field__show-password {
+  height: 100%;
+  min-width: 2.75rem;
+}
+
 .bandit-auth-shell [data-amplify-authenticator] .amplify-label {
   display: block;
   width: 100%;
@@ -31,11 +53,34 @@
   width: 100%;
 }
 
-.bandit-auth-shell [data-amplify-authenticator] input[type='password'] {
+.bandit-auth-shell [data-amplify-authenticator] input[type='password'],
+.bandit-auth-shell [data-amplify-authenticator] input[type='text'] {
   text-align: center;
 }
 
 .bandit-auth-shell [data-amplify-authenticator] .amplify-button[data-variation='primary'] {
   width: 100%;
+  max-width: 300px;
+}
+
+/* Disabled Sign in must stay readable on the dark branded splash (not washed white) */
+.bandit-auth-shell [data-amplify-authenticator] .amplify-button[data-variation='primary']:disabled,
+.bandit-auth-shell [data-amplify-authenticator] .amplify-button--disabled[data-variation='primary'],
+.bandit-auth-shell [data-amplify-authenticator] .amplify-button[data-variation='primary'][disabled] {
+  background-color: rgba(77, 182, 196, 0.35) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-color: transparent !important;
+  opacity: 1 !important;
+  cursor: not-allowed;
+}
+
+/* Remember username: checkbox beside label on one row */
+.bandit-auth-shell .bandit-remember-username {
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: center;
+  gap: 0.5rem;
+  width: auto;
   max-width: 300px;
 }
