@@ -59,7 +59,7 @@ function readFileAsDataUrl(file) {
 }
 
 async function uploadAsset(mediaId, assetType, file) {
-  const dataUrl = await readFileAsDataUrl(file)
+  const localPreviewUrl = URL.createObjectURL(file)
   const { data, error } = await createMediaAssetUploadToken(mediaId, {
     assetType,
     contentType: file.type || (assetType === 'demoVideo' ? 'video/mp4' : 'image/jpeg'),
@@ -72,15 +72,24 @@ async function uploadAsset(mediaId, assetType, file) {
       headers: { 'Content-Type': file.type || data.contentType || 'application/octet-stream' },
     })
     if (!put.ok) {
+      URL.revokeObjectURL(localPreviewUrl)
       throw new Error(`Asset upload failed (${put.status})`)
     }
+    // Persist object key only — API mints GetObject URLs for display (no multi-MB data URLs).
     return {
-      url: data.publicUrl || dataUrl,
+      previewUrl: localPreviewUrl,
       objectKey: data.objectKey,
+      persistInlinePreview: false,
     }
   }
   // Alpha / no bucket: persist preview as data URL on the media record.
-  return { url: dataUrl, objectKey: data?.objectKey || null }
+  const dataUrl = await readFileAsDataUrl(file)
+  URL.revokeObjectURL(localPreviewUrl)
+  return {
+    previewUrl: dataUrl,
+    objectKey: data?.objectKey || null,
+    persistInlinePreview: true,
+  }
 }
 
 /** SW-057: mint content upload-token and PUT the VR package (.pak) to private S3. */
@@ -235,18 +244,26 @@ export default function MediaPage() {
         setEditingId(mediaId)
       }
       const uploaded = await uploadAsset(mediaId, assetType, file)
-      const patch = {
-        [assetType]: uploaded.url,
-        ...(assetType === 'image' && uploaded.objectKey
-          ? { imageObjectKey: uploaded.objectKey }
-          : {}),
-        ...(assetType === 'demoVideo' && uploaded.objectKey
-          ? { demoVideoObjectKey: uploaded.objectKey }
-          : {}),
+      const patch =
+        assetType === 'image'
+          ? {
+              ...(uploaded.objectKey ? { imageObjectKey: uploaded.objectKey } : {}),
+              ...(uploaded.persistInlinePreview ? { image: uploaded.previewUrl } : {}),
+            }
+          : {
+              ...(uploaded.objectKey ? { demoVideoObjectKey: uploaded.objectKey } : {}),
+              ...(uploaded.persistInlinePreview ? { demoVideo: uploaded.previewUrl } : {}),
+            }
+      if (!uploaded.objectKey && !uploaded.persistInlinePreview) {
+        throw new Error('Upload succeeded but no object key was returned')
       }
       const updated = await updateMedia(mediaId, patch)
       if (updated.error) throw new Error(updated.error)
-      setDraft((prev) => ({ ...prev, [assetType]: uploaded.url }))
+      const displayUrl =
+        (assetType === 'image'
+          ? updated.data?.media?.image || updated.data?.media?.cover
+          : updated.data?.media?.demoVideo) || uploaded.previewUrl
+      setDraft((prev) => ({ ...prev, [assetType]: displayUrl }))
       setMessageSeverity('success')
       setMessage(`${assetType === 'image' ? 'Image' : 'Demo video'} uploaded`)
       await loadCatalog()
