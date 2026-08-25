@@ -401,9 +401,14 @@ export default function MediaPage() {
                     }}
                   >
                     {image ? (
-                      <CardMedia component="img" height="120" image={image} alt={item.name} />
+                      <CardMedia
+                        component="img"
+                        image={image}
+                        alt={item.name}
+                        sx={{ aspectRatio: '3 / 2', width: '100%', objectFit: 'cover' }}
+                      />
                     ) : (
-                      <Box sx={{ height: 120, bgcolor: 'background.default' }} />
+                      <Box sx={{ aspectRatio: '3 / 2', width: '100%', bgcolor: 'background.default' }} />
                     )}
                     <CardContent sx={{ flex: 1 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
@@ -517,7 +522,13 @@ export default function MediaPage() {
                 component="img"
                 src={draft.image}
                 alt="Preview"
-                sx={{ maxHeight: 120, objectFit: 'contain', borderRadius: 1 }}
+                sx={{
+                  aspectRatio: '3 / 2',
+                  width: '100%',
+                  objectFit: 'cover',
+                  borderRadius: 1,
+                  bgcolor: 'background.default',
+                }}
               />
             ) : null}
             <Stack direction="row" spacing={1} alignItems="center">

@@ -3,9 +3,13 @@ import { Box, CircularProgress, Alert, Typography, Button } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { getConfig, getTelemetryCurrent } from '../../api/device'
 import { usePlayerSession } from '../../session/PlayerSessionContext'
+import {
+  POSITION_HISTORY_MAX_DURATION_MS,
+  computeVrTrailViewConfig,
+  prunePositionHistory,
+} from './vrTrailView'
 
-// Constants for position history
-const POSITION_HISTORY_MAX_DURATION_MS = 3 * 60 * 1000 // 3 minutes in milliseconds
+const POSITION_HISTORY_PRUNE_INTERVAL_MS = 5000
 const USER_STATUS_FALL = 2
 const TRAIL_COLOR_SAFE = '#4db6c4'
 const TRAIL_COLOR_WARNING = '#ffeb3b'
@@ -1556,6 +1560,13 @@ function VRPositionViewer({ userState, config }) {
 
   // Update position history and safety markers when telemetry changes
   useEffect(() => {
+    if (!userState) {
+      setPositionHistory([])
+      setEventMarkers([])
+      lastSafetyRef.current = { atWall: false, fallen: false }
+      return
+    }
+
     const now = Date.now()
     const dist = userState?.distanceFromCenter
       ?? Math.hypot(userState?.userPosition?.x || 0, userState?.userPosition?.y || 0)
@@ -1564,32 +1575,30 @@ function VRPositionViewer({ userState, config }) {
     const fallen = userState?.userStatus === USER_STATUS_FALL
     const newPoint = { x: unboundedPos.x, y: unboundedPos.y, timestamp: now, inWarning }
 
-    setPositionHistory(prev => {
-      const last = prev[prev.length - 1]
+    setPositionHistory((prev) => {
+      const pruned = prunePositionHistory(prev, now)
+      const last = pruned[pruned.length - 1]
       const moved = !last
         || Math.hypot(newPoint.x - last.x, newPoint.y - last.y) > 0.001
         || last.inWarning !== inWarning
       if (!moved) {
-        return prev
+        return pruned.length === prev.length ? prev : pruned
       }
-      const updated = [...prev, newPoint]
+      const updated = prunePositionHistory([...pruned, newPoint], now)
 
-      const cutoff = now - POSITION_HISTORY_MAX_DURATION_MS
-      const filtered = updated.filter(p => p.timestamp >= cutoff)
-
-      if (filtered.length > 2000) {
+      if (updated.length > 2000) {
         const sampled = []
-        const step = Math.ceil(filtered.length / 1500)
-        for (let i = 0; i < filtered.length; i += step) {
-          sampled.push(filtered[i])
+        const step = Math.ceil(updated.length / 1500)
+        for (let i = 0; i < updated.length; i += step) {
+          sampled.push(updated[i])
         }
-        if (sampled[sampled.length - 1] !== filtered[filtered.length - 1]) {
-          sampled.push(filtered[filtered.length - 1])
+        if (sampled[sampled.length - 1] !== updated[updated.length - 1]) {
+          sampled.push(updated[updated.length - 1])
         }
         return sampled
       }
 
-      return filtered
+      return updated
     })
 
     const prevSafety = lastSafetyRef.current
@@ -1601,15 +1610,12 @@ function VRPositionViewer({ userState, config }) {
       nextMarkers.push({ type: 'fall', x: unboundedPos.x, y: unboundedPos.y, timestamp: now })
     }
     lastSafetyRef.current = { atWall, fallen }
-    if (nextMarkers.length > 0) {
-      setEventMarkers(prev => {
-        const cutoff = now - POSITION_HISTORY_MAX_DURATION_MS
-        return [...prev.filter(m => m.timestamp >= cutoff), ...nextMarkers]
-      })
-    } else {
-      setEventMarkers(prev => prev.filter(m => m.timestamp >= now - POSITION_HISTORY_MAX_DURATION_MS))
-    }
+    setEventMarkers((prev) => {
+      const kept = prunePositionHistory(prev, now)
+      return nextMarkers.length > 0 ? [...kept, ...nextMarkers] : kept
+    })
   }, [
+    userState,
     unboundedPos.x,
     unboundedPos.y,
     userState?.distanceFromCenter,
@@ -1620,14 +1626,37 @@ function VRPositionViewer({ userState, config }) {
     boundaryRadii.violation,
   ])
 
-  // Calculate bounding box of all positions in history
+  // Prune trail while the runner is idle so the window stays wall-clock limited.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const now = Date.now()
+      setPositionHistory((prev) => {
+        const next = prunePositionHistory(prev, now)
+        return next.length === prev.length ? prev : next
+      })
+      setEventMarkers((prev) => {
+        const next = prunePositionHistory(prev, now)
+        return next.length === prev.length ? prev : next
+      })
+    }, POSITION_HISTORY_PRUNE_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [])
+
+  // Bounding box of the trailing window only (used to size the view before the max clamp).
   const bounds = useMemo(() => {
     if (positionHistory.length === 0) {
-      return { minX: -5, maxX: 5, minY: -5, maxY: 5 }
+      return {
+        minX: unboundedPos.x - 5,
+        maxX: unboundedPos.x + 5,
+        minY: unboundedPos.y - 5,
+        maxY: unboundedPos.y + 5,
+      }
     }
 
-    let minX = Infinity, maxX = -Infinity
-    let minY = Infinity, maxY = -Infinity
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
 
     for (const p of positionHistory) {
       minX = Math.min(minX, p.x)
@@ -1636,13 +1665,11 @@ function VRPositionViewer({ userState, config }) {
       maxY = Math.max(maxY, p.y)
     }
 
-    // Include current position
     minX = Math.min(minX, unboundedPos.x)
     maxX = Math.max(maxX, unboundedPos.x)
     minY = Math.min(minY, unboundedPos.y)
     maxY = Math.max(maxY, unboundedPos.y)
 
-    // Add padding (at least 2 meters on each side, or 20% of range)
     const rangeX = maxX - minX || 1
     const rangeY = maxY - minY || 1
     const paddingX = Math.max(2, rangeX * 0.2)
@@ -1652,33 +1679,22 @@ function VRPositionViewer({ userState, config }) {
       minX: minX - paddingX,
       maxX: maxX + paddingX,
       minY: minY - paddingY,
-      maxY: maxY + paddingY
+      maxY: maxY + paddingY,
     }
   }, [positionHistory, unboundedPos])
 
-  // Calculate view configuration that fits entire movement history
-  const viewConfig = useMemo(() => {
-    const rangeX = bounds.maxX - bounds.minX
-    const rangeY = bounds.maxY - bounds.minY
-    const viewSize = Math.max(rangeX, rangeY, 10) // Minimum 10 meters view
-
-    const padding = 40
-    const availableSize = Math.min(dimensions.width, dimensions.height) - padding * 2
-    const scale = availableSize / viewSize // pixels per meter
-
-    // Center of view is center of bounds
-    const viewCenterX = (bounds.minX + bounds.maxX) / 2
-    const viewCenterY = (bounds.minY + bounds.maxY) / 2
-
-    return {
-      scale,
-      viewSize,
-      viewCenterX,
-      viewCenterY,
-      centerX: dimensions.width / 2,
-      centerY: dimensions.height / 2
-    }
-  }, [dimensions, bounds])
+  // Follow the user; clamp world extent so long distance inside the trail window cannot collapse scale.
+  const viewConfig = useMemo(
+    () =>
+      computeVrTrailViewConfig({
+        bounds,
+        userX: unboundedPos.x,
+        userY: unboundedPos.y,
+        panelWidth: dimensions.width,
+        panelHeight: dimensions.height,
+      }),
+    [dimensions, bounds, unboundedPos],
+  )
 
   // Convert world position to SVG coordinates
   const worldToSvg = useCallback((worldX, worldY) => {
@@ -1724,50 +1740,47 @@ function VRPositionViewer({ userState, config }) {
       }))
   }, [positionHistory, worldToSvg])
 
-  // Generate grid lines - dynamically based on view size
+  // Generate grid lines for the visible viewport (not the full trail AABB).
   const gridLines = useMemo(() => {
     if (!viewConfig) return { vertical: [], horizontal: [] }
 
     const lines = { vertical: [], horizontal: [] }
 
-    // Determine grid spacing based on view size (1m, 5m, 10m, etc.)
     let gridSpacing = 1
     if (viewConfig.viewSize > 50) gridSpacing = 10
     else if (viewConfig.viewSize > 20) gridSpacing = 5
     else if (viewConfig.viewSize > 10) gridSpacing = 2
 
-    // Calculate grid range
-    const startX = Math.floor(bounds.minX / gridSpacing) * gridSpacing
-    const endX = Math.ceil(bounds.maxX / gridSpacing) * gridSpacing
-    const startY = Math.floor(bounds.minY / gridSpacing) * gridSpacing
-    const endY = Math.ceil(bounds.maxY / gridSpacing) * gridSpacing
+    const half = viewConfig.viewSize / 2
+    const startX = Math.floor((viewConfig.viewCenterX - half) / gridSpacing) * gridSpacing
+    const endX = Math.ceil((viewConfig.viewCenterX + half) / gridSpacing) * gridSpacing
+    const startY = Math.floor((viewConfig.viewCenterY - half) / gridSpacing) * gridSpacing
+    const endY = Math.ceil((viewConfig.viewCenterY + half) / gridSpacing) * gridSpacing
 
-    // Vertical lines
     for (let x = startX; x <= endX; x += gridSpacing) {
-      const svg = worldToSvg(x, 0)
+      const svg = worldToSvg(x, viewConfig.viewCenterY)
       const isMajor = x % (gridSpacing * 5) === 0 || x === 0
       lines.vertical.push({
         x: svg.x,
         label: x,
         isMajor,
-        isOrigin: x === 0
+        isOrigin: x === 0,
       })
     }
 
-    // Horizontal lines
     for (let y = startY; y <= endY; y += gridSpacing) {
-      const svg = worldToSvg(0, y)
+      const svg = worldToSvg(viewConfig.viewCenterX, y)
       const isMajor = y % (gridSpacing * 5) === 0 || y === 0
       lines.horizontal.push({
         y: svg.y,
         label: y,
         isMajor,
-        isOrigin: y === 0
+        isOrigin: y === 0,
       })
     }
 
     return lines
-  }, [viewConfig, bounds, worldToSvg])
+  }, [viewConfig, worldToSvg])
 
   // Icon size scales with the VR viewer panel size (matches tread user marker).
   const iconSize = BASELINE_ICON_PX * USER_ICON_SCALE * uiScale
@@ -1949,7 +1962,10 @@ function VRPositionViewer({ userState, config }) {
           textAnchor="end"
         >
           {positionHistory.length > 0
-            ? `${Math.round((Date.now() - positionHistory[0].timestamp) / 1000)}s trail`
+            ? `${Math.min(
+                Math.round((Date.now() - positionHistory[0].timestamp) / 1000),
+                Math.round(POSITION_HISTORY_MAX_DURATION_MS / 1000),
+              )}s trail`
             : ''}
         </text>
       </svg>
