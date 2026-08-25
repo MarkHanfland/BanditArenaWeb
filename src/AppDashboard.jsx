@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -116,15 +116,24 @@ function TabPanel({ children, isActive, noPadding = false, scrollable = false })
 
 export default function Dashboard() {
   const deviceOnline = useDeviceOnline()
+  const [activeTab, setActiveTab] = useState('dashboard')
+
+  const handleSessionStarted = useCallback(() => {
+    setActiveTab('dashboard')
+  }, [])
+
   return (
-    <PlayerSessionProvider deviceOnline={deviceOnline === true}>
-      <DashboardView deviceOnline={deviceOnline} />
+    <PlayerSessionProvider deviceOnline={deviceOnline === true} onSessionStarted={handleSessionStarted}>
+      <DashboardView
+        deviceOnline={deviceOnline}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
     </PlayerSessionProvider>
   )
 }
 
-function DashboardView({ deviceOnline }) {
-  const [activeTab, setActiveTab] = useState('dashboard')
+function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   const { accessToken, cloudAuthToken, idToken, user, logout, refreshAccessToken, login } = useAuth()
   const { phase, sessionActive } = usePlayerSession()
   const [treadmillState, setTreadmillState] = useState(null)

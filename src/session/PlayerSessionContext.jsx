@@ -14,7 +14,7 @@ import { formatSessionClock, sessionPhaseFrom, SESSION_PHASE, SESSION_PHASE_LABE
 
 const PlayerSessionContext = createContext(null)
 
-export function PlayerSessionProvider({ children, deviceOnline = true }) {
+export function PlayerSessionProvider({ children, deviceOnline = true, onSessionStarted }) {
   const [session, setSession] = useState(null)
   const [players, setPlayers] = useState([])
   const [mediaOptions, setMediaOptions] = useState([])
@@ -230,8 +230,9 @@ export function PlayerSessionProvider({ children, deviceOnline = true }) {
       setMessage(data.cloudWarning)
     }
     setBusy(false)
+    onSessionStarted?.()
     return true
-  }, [mediaOptions])
+  }, [mediaOptions, onSessionStarted])
 
   const handleStart = useCallback(async () => {
     if (!selected?.userId) {
