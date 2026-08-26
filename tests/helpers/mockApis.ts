@@ -103,7 +103,42 @@ export function createCloudFixture() {
   const tickets: Array<Record<string, unknown>> = [];
   const diagCommands: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
-  const offerings: Array<Record<string, unknown>> = [];
+  const offerings: Array<Record<string, unknown>> = [
+    {
+      skuId: 'BA-CORE-BUNDLE',
+      offeringType: 'primary_system',
+      name: 'Bandit Arena Core',
+      stream: 'hardware',
+      unitPriceUsd: 25000,
+      productId: 'bandit-arena-core',
+    },
+    {
+      skuId: 'BA-PRO-BUNDLE',
+      offeringType: 'primary_system',
+      name: 'Bandit Arena Pro',
+      stream: 'hardware',
+      unitPriceUsd: 32000,
+      productId: 'bandit-arena-pro',
+    },
+    {
+      skuId: 'BA-SPARE-MEMBRANE',
+      offeringType: 'spare',
+      name: 'Replacement tread membrane',
+      stream: 'parts',
+      unitPriceUsd: 1600,
+      componentId: 'hw-membrane',
+      compatibleProductIds: ['product-demo-treadmill', 'bandit-arena-core', 'bandit-arena-pro'],
+    },
+    {
+      skuId: 'BA-ADDON-DOME',
+      offeringType: 'addon',
+      name: 'Projection dome add-on',
+      stream: 'hardware',
+      unitPriceUsd: 8500,
+      compatibleProductIds: ['bandit-arena-pro'],
+      requiresFeatures: ['dome_capable'],
+    },
+  ];
   const alerts: Array<Record<string, unknown>> = [
     {
       alertId: 'alert-001',
@@ -410,23 +445,27 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       if (!body.computeSerialNumber) {
         return json({ error: 'computeSerialNumber is required (ASSY-COMPUTE unique serial)' }, 400);
       }
+      const instance = {
+        instanceId: 'instance-new',
+        model: body.model,
+        computeSerialNumber: body.computeSerialNumber,
+        status: 'provisioned',
+        firmwareVersion: '1.2.0-alpha',
+        certificateThumbprint: 'abc123',
+      };
+      fixture.instances.push(instance);
+      const oneTimeCredentials = {
+        certificatePem: '-----BEGIN BANDIT ALPHA DEVICE CERTIFICATE-----\nDEMO\n-----END BANDIT ALPHA DEVICE CERTIFICATE-----',
+        privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEMO\n-----END PRIVATE KEY-----',
+        certificateCn: 'bandit-device-instance-new',
+        certificateThumbprint: 'abc123',
+        certificateSource: 'alpha-ephemeral',
+      };
       return json(
         {
-          instance: {
-            instanceId: 'instance-new',
-            model: body.model,
-            computeSerialNumber: body.computeSerialNumber,
-            status: 'provisioned',
-            firmwareVersion: '1.2.0-alpha',
-            certificateThumbprint: 'abc123',
-          },
-          oneTimeCredentials: {
-            certificatePem: '-----BEGIN BANDIT ALPHA DEVICE CERTIFICATE-----\nDEMO\n-----END BANDIT ALPHA DEVICE CERTIFICATE-----',
-            privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEMO\n-----END PRIVATE KEY-----',
-            certificateCn: 'bandit-device-instance-new',
-            certificateThumbprint: 'abc123',
-            certificateSource: 'alpha-ephemeral',
-          },
+          instance,
+          oneTimeCredentials,
+          credentials: oneTimeCredentials,
           message: 'Device provisioned',
         },
         201,
@@ -537,42 +576,7 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path === '/commerce/catalog' && method === 'GET') {
       return json({
-        offerings: fixture.offerings || [
-          {
-            skuId: 'BA-CORE-BUNDLE',
-            offeringType: 'primary_system',
-            name: 'Bandit Arena Core',
-            stream: 'hardware',
-            unitPriceUsd: 25000,
-            productId: 'bandit-arena-core',
-          },
-          {
-            skuId: 'BA-PRO-BUNDLE',
-            offeringType: 'primary_system',
-            name: 'Bandit Arena Pro',
-            stream: 'hardware',
-            unitPriceUsd: 32000,
-            productId: 'bandit-arena-pro',
-          },
-          {
-            skuId: 'BA-SPARE-MEMBRANE',
-            offeringType: 'spare',
-            name: 'Replacement tread membrane',
-            stream: 'parts',
-            unitPriceUsd: 1600,
-            componentId: 'hw-membrane',
-            compatibleProductIds: ['product-demo-treadmill', 'bandit-arena-core', 'bandit-arena-pro'],
-          },
-          {
-            skuId: 'BA-ADDON-DOME',
-            offeringType: 'addon',
-            name: 'Projection dome add-on',
-            stream: 'hardware',
-            unitPriceUsd: 8500,
-            compatibleProductIds: ['bandit-arena-pro'],
-            requiresFeatures: ['dome_capable'],
-          },
-        ],
+        offerings: fixture.offerings,
         message: 'Commerce offerings',
       });
     }

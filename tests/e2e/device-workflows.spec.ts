@@ -57,7 +57,7 @@ test('header session start and end for an enrolled player', async ({ page }) => 
   await expect(page.getByTestId('menu-dashboard')).toHaveClass(/Mui-selected/);
   await expect(page.getByTestId('dashboard-treadmill-state')).toBeVisible();
   await expect(page.getByTestId('dashboard-vr-position')).toBeVisible();
-  await expect(page.getByTestId('header-session-player')).toHaveText('Alex Runner');
+  await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
   await expect(page.getByTestId('dashboard-session-time')).toHaveText(/\d+:\d{2}/);
   await expect(page.getByTestId('menu-user')).toBeEnabled();
 

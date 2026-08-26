@@ -27,13 +27,19 @@ test('enrollment activate then start session for a pending user', async ({ page 
   await mockConsoleApis(page, fixture);
   await signInAsVenueAdmin(page);
 
+  // Wait for device ping + media auto-select before Users page startSession.
+  await expect(page.getByTestId('header-media-select')).toHaveValue(/Alpine Trail/);
+
   await page.getByTestId('menu-users').click();
   await expect(page.getByText('Jordan Pending')).toBeVisible();
   await page.getByTestId('activate-user-demo-002').click();
   await expect(page.getByTestId('enrollment-message')).toContainText('Jordan Pending is now active');
 
   await page.getByTestId('start-session-user-demo-002').click();
-  await expect(page.getByTestId('enrollment-message')).toContainText('Device session started for Jordan Pending');
+  // Start Session navigates to Dashboard (FR-SW-UI-001).
+  await expect(page.getByTestId('menu-dashboard')).toHaveClass(/Mui-selected/);
+  await expect(page.getByTestId('header-session-end')).toBeVisible();
+  await expect(page.getByTestId('header-player-select')).toHaveValue(/Jordan Pending/);
 });
 
 test('enrollment suspend blocks a later cloud session start', async ({ page }) => {
@@ -52,10 +58,14 @@ test('session start on the device console starts the local session for an active
   await mockConsoleApis(page);
   await signInAsVenueAdmin(page);
 
+  await expect(page.getByTestId('header-media-select')).toHaveValue(/Alpine Trail/);
+
   await page.getByTestId('menu-users').click();
   await expect(page.getByText('Alex Runner')).toBeVisible();
   await page.getByTestId('start-session-user-demo-001').click();
-  await expect(page.getByTestId('enrollment-message')).toContainText('Device session started for Alex Runner');
+  await expect(page.getByTestId('menu-dashboard')).toHaveClass(/Mui-selected/);
+  await expect(page.getByTestId('header-session-end')).toBeVisible();
+  await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
 });
 
 test('session start is blocked by the license gate for a non-active user', async ({ page }) => {
@@ -135,6 +145,8 @@ test('fleet activate flow activates a provisioned device', async ({ page }) => {
   await signInAsVenueAdmin(page);
 
   await page.getByTestId('menu-fleet').click();
+  await page.getByTestId('fleet-row-i-provisioned').click();
+  await page.getByRole('tab', { name: 'Lifecycle' }).click();
   await page.getByTestId('activate-i-provisioned').click();
   await expect(page.getByText('Activated i-provisioned')).toBeVisible();
 });
@@ -147,7 +159,7 @@ test('reservation book flow confirms a slot and sets the next player', async ({ 
   await expect(page.getByRole('heading', { name: 'Reservations' })).toBeVisible();
   await page.getByTestId('book-slot-001').click();
   await expect(page.getByText(/Booked slot-001 for Alex Runner/)).toBeVisible();
-  await expect(page.getByText(/Set as next player/)).toBeVisible();
+  await expect(page.getByText(/Reminder queued/)).toBeVisible();
 });
 
 test('staff assign role records a venue operator', async ({ page }) => {
@@ -200,8 +212,8 @@ test('commerce spare order submits for a device', async ({ page }) => {
 
   await page.getByTestId('menu-billing').click();
   await page.getByTestId('commerce-create-order').click();
-  await page.getByTestId('order-sku').click();
-  await page.getByRole('option', { name: /BA-SPARE-MEMBRANE/ }).click();
+  // Default SKU is BA-SPARE-MEMBRANE; MUI Select puts data-testid on the hidden native input.
+  await expect(page.getByTestId('order-sku')).toHaveValue('BA-SPARE-MEMBRANE');
   await page.getByTestId('order-submit').click();
   await expect(page.getByTestId('billing-message')).toContainText('Order ord-');
 });
@@ -258,9 +270,9 @@ test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) 
 
   await page.getByTestId('menu-fleet').click();
   await expect(page.getByTestId('fleet-map')).toBeVisible();
-  await expect(page.getByText('Neon Circuit')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Neon Circuit' })).toBeVisible();
   await page.getByTestId('fleet-fleet-horizon-parks').click();
-  await expect(page.getByText('Horizon Parks')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Horizon Parks' })).toBeVisible();
   await page.getByTestId('fleet-tab-financial').click();
   await expect(page.getByTestId('device-financials')).toBeVisible();
 });

@@ -72,7 +72,7 @@ export default function UsersPage() {
   const [actionMessage, setActionMessage] = useState('')
   const [busyUserId, setBusyUserId] = useState('')
   const onDevice = !isCloudDeployment()
-  const { startForPlayer } = usePlayerSession()
+  const { startForPlayer, selectedMediaId } = usePlayerSession()
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -158,10 +158,15 @@ export default function UsersPage() {
       return
     }
     if (onDevice) {
+      if (!selectedMediaId) {
+        setActionMessage('Select a media title in the header before starting a device session.')
+        return
+      }
       const started = await startForPlayer({
         userId,
         displayName: user?.name || userId,
         ageAttested: Boolean(user?.ageAttested),
+        mediaId: selectedMediaId,
       })
       if (!started) {
         setActionMessage('Device session start failed. Use the header player Start after selecting an enrolled player.')
