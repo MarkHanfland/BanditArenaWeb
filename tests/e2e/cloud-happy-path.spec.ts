@@ -214,7 +214,28 @@ test('analytics page shows summary cards', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
   await expect(page.getByText('Sessions (7d)')).toBeVisible();
   await expect(page.getByTestId('analytics-sessions')).toHaveText('5');
-  await expect(page.getByTestId('analytics-trend')).toContainText('1 → 2 → 3');
+  await expect(page.getByTestId('analytics-trend')).toBeVisible();
+  await expect(page.getByText('1 → 2 → 3')).toBeVisible();
+});
+
+test('SW-090: analytics alert ack and notification history', async ({ page }) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsVenueAdmin(page);
+
+  await page.getByTestId('menu-usage').click();
+  await expect(page.getByTestId('analytics-alert-alert-001')).toBeVisible();
+  await expect(page.getByText('Device i1 is offline')).toBeVisible();
+
+  await page.getByTestId('ack-alert-alert-001').click();
+  await expect(page.getByTestId('analytics-action-message')).toContainText(/Acknowledged|acknowledged/i);
+  await expect(page.getByTestId('analytics-alerts-empty')).toBeVisible();
+  expect(fixture.alerts.find((a) => a.alertId === 'alert-001')?.status).toBe('acknowledged');
+
+  await page.getByTestId('send-session-reminder').click();
+  await expect(page.getByTestId('notification-notif-1')).toBeVisible();
+  await expect(page.getByTestId('analytics-notifications')).toContainText('session_reminder');
+  expect(fixture.notifications.length).toBeGreaterThan(0);
 });
 
 test('maintenance records an event for the selected device', async ({ page }) => {

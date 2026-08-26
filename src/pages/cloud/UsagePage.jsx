@@ -9,7 +9,13 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
-import { getAnalyticsSummary } from '../../api/cloud'
+import {
+  acknowledgeAlert,
+  getAnalyticsSummary,
+  listAlerts,
+  listNotifications,
+  sendNotification,
+} from '../../api/cloud'
 import { analyticsFleetComparison } from '../../data/fleetDemoCatalog'
 
 function usd(n) {
@@ -129,7 +135,21 @@ export default function UsagePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
+  const [alerts, setAlerts] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [actionMessage, setActionMessage] = useState('')
+  const [ackingId, setAckingId] = useState('')
+  const [sendingNotif, setSendingNotif] = useState(false)
   const fleets = useMemo(() => analyticsFleetComparison(), [])
+
+  const refreshAlertsAndHistory = async () => {
+    const [alertRes, notifRes] = await Promise.all([
+      listAlerts({ status: 'open' }),
+      listNotifications({}),
+    ])
+    if (!alertRes.error) setAlerts(alertRes.data?.alerts || [])
+    if (!notifRes.error) setNotifications(notifRes.data?.notifications || [])
+  }
 
   useEffect(() => {
     let mounted = true
@@ -138,7 +158,8 @@ export default function UsagePage() {
       if (!mounted) return
       if (apiError) setError(apiError)
       else setSummary(data)
-      setLoading(false)
+      await refreshAlertsAndHistory()
+      if (mounted) setLoading(false)
     })()
     return () => {
       mounted = false
@@ -148,6 +169,36 @@ export default function UsagePage() {
   const openFleet = () => {
     const btn = document.querySelector('[data-testid="menu-fleet"]')
     if (btn) btn.click()
+  }
+
+  const handleAck = async (alertId) => {
+    setAckingId(alertId)
+    setActionMessage('')
+    const { error: ackError, data } = await acknowledgeAlert(alertId, {})
+    setAckingId('')
+    if (ackError) {
+      setActionMessage(ackError)
+      return
+    }
+    setActionMessage(data?.message || `Acknowledged ${alertId}`)
+    await refreshAlertsAndHistory()
+  }
+
+  const handleSendReminder = async () => {
+    setSendingNotif(true)
+    setActionMessage('')
+    const { error: sendError, data } = await sendNotification({
+      userId: 'user-demo-001',
+      channel: 'email',
+      template: 'session_reminder',
+    })
+    setSendingNotif(false)
+    if (sendError) {
+      setActionMessage(sendError)
+      return
+    }
+    setActionMessage(data?.message || 'Notification sent')
+    await refreshAlertsAndHistory()
   }
 
   const totalRevenue = fleets.reduce((a, f) => a + f.sessionRevenue30d, 0)
@@ -239,16 +290,89 @@ export default function UsagePage() {
             </Typography>
           </Box>
 
-          {(summary?.alerts || []).length === 0 && (
-            <Typography variant="body2" color="text.secondary">
+          {alerts.length === 0 && (
+            <Typography variant="body2" color="text.secondary" data-testid="analytics-alerts-empty">
               No open alerts.
             </Typography>
           )}
-          {(summary?.alerts || []).map((alert) => (
-            <Alert key={alert.id} severity={alert.severity === 'info' ? 'info' : 'warning'}>
-              {alert.message}
+          <Stack spacing={1} data-testid="analytics-alerts">
+            {alerts.map((alert) => {
+              const id = alert.alertId || alert.id
+              return (
+                <Alert
+                  key={id}
+                  severity={alert.severity === 'info' ? 'info' : 'warning'}
+                  data-testid={`analytics-alert-${id}`}
+                  action={
+                    id ? (
+                      <Button
+                        color="inherit"
+                        size="small"
+                        disabled={ackingId === id || alert.status === 'acknowledged'}
+                        data-testid={`ack-alert-${id}`}
+                        onClick={() => handleAck(id)}
+                      >
+                        {ackingId === id ? 'Ack…' : 'Ack'}
+                      </Button>
+                    ) : null
+                  }
+                >
+                  {alert.message}
+                </Alert>
+              )
+            })}
+          </Stack>
+
+          <Box
+            data-testid="analytics-notifications"
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ color: '#fff' }}>
+                Notification history
+              </Typography>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={sendingNotif}
+                data-testid="send-session-reminder"
+                onClick={handleSendReminder}
+              >
+                {sendingNotif ? 'Sending…' : 'Send reminder'}
+              </Button>
+            </Stack>
+            {notifications.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" data-testid="analytics-notifications-empty">
+                No notifications yet.
+              </Typography>
+            ) : (
+              <Stack spacing={0.75} component="ul" sx={{ m: 0, pl: 2 }}>
+                {notifications.slice(0, 8).map((n) => (
+                  <Typography
+                    key={n.notificationId || n.id}
+                    component="li"
+                    variant="body2"
+                    color="text.secondary"
+                    data-testid={`notification-${n.notificationId || n.id}`}
+                  >
+                    {(n.templateId || n.template || 'notification') +
+                      ` · ${n.channel || 'email'} · ${n.status || 'queued'}`}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
+          {actionMessage ? (
+            <Alert severity="info" data-testid="analytics-action-message">
+              {actionMessage}
             </Alert>
-          ))}
+          ) : null}
         </Stack>
       </PageScaffold>
     </Box>

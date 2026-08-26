@@ -18,20 +18,6 @@ jobs:
       - name: Checkout BanditArenaWeb
         uses: actions/checkout@v4
 
-      - name: Checkout BanditArena
-        uses: actions/checkout@v4
-        with:
-          repository: MarkHanfland/BanditArena
-          path: BanditArena
-          fetch-depth: 1
-
-      - name: Materialize test credentials
-        working-directory: BanditArena
-        env:
-          BANDIT_COGNITO_TEST_PASSWORD: ${{ secrets.BANDIT_COGNITO_TEST_PASSWORD }}
-        run: |
-          pwsh ./scripts/test/Materialize-TestCredentials.ps1
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -45,7 +31,11 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
+      # Cloud happy-path / console specs use VITE_E2E_AUTH_BYPASS — no private
+      # BanditArena credentials checkout required (sibling repo is often inaccessible
+      # to GITHUB_TOKEN). Fixture usernames satisfy the bypass login form.
       - name: Run Playwright tests
         env:
-          BANDIT_TEST_CREDENTIALS_PATH: ${{ github.workspace }}/BanditArena/credentials/test-credentials.json
+          BANDIT_TEST_CREDENTIALS_PATH: ${{ github.workspace }}/tests/fixtures/e2e-bypass-credentials.json
+          VITE_E2E_AUTH_BYPASS: 'true'
         run: npm run test:e2e

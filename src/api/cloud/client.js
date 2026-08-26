@@ -455,6 +455,54 @@ export async function sendNotification(payload) {
 
 
 
+export async function listNotifications(params = {}) {
+
+  const qs = new URLSearchParams()
+
+  if (params.userId) qs.set('userId', params.userId)
+
+  if (params.status) qs.set('status', params.status)
+
+  if (params.channel) qs.set('channel', params.channel)
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+
+  return request(() => cloudApi.get(`/notifications${suffix}`))
+
+}
+
+
+
+export async function listAlerts(params = {}) {
+
+  const qs = new URLSearchParams()
+
+  if (params.status) qs.set('status', params.status)
+
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+
+  return request(() => cloudApi.get(`/alerts${suffix}`))
+
+}
+
+
+
+export async function acknowledgeAlert(alertId, payload = {}) {
+
+  return request(() => cloudApi.post(`/alerts/${alertId}/ack`, payload))
+
+}
+
+
+
+export async function listAlertRules() {
+
+  return request(() => cloudApi.get('/alert-rules'))
+
+}
+
+
+
 export async function getAnalyticsSummary() {
 
   return request(() => cloudApi.get('/analytics/summary'))

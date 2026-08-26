@@ -104,6 +104,18 @@ export function createCloudFixture() {
   const diagCommands: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
   const offerings: Array<Record<string, unknown>> = [];
+  const alerts: Array<Record<string, unknown>> = [
+    {
+      alertId: 'alert-001',
+      ruleId: 'rule-device-offline',
+      instanceId: 'i1',
+      metric: 'device_status',
+      severity: 'warning',
+      status: 'open',
+      message: 'Device i1 is offline',
+    },
+  ];
+  const notifications: Array<Record<string, unknown>> = [];
 
   return {
     tenant: demoTenant,
@@ -123,6 +135,8 @@ export function createCloudFixture() {
     diagCommands,
     orders,
     offerings,
+    alerts,
+    notifications,
   };
 }
 
@@ -273,8 +287,41 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         activeDevices: 1,
         enrolledUsers: fixture.users.filter((u) => u.enrollmentState === 'active').length,
         weeklySessionTrend: [1, 2, 3],
-        alerts: [],
+        alerts: fixture.alerts.filter((a) => a.status === 'open'),
       });
+    }
+    if (path === '/alert-rules' && method === 'GET') {
+      return json({
+        message: 'Alert rules',
+        rules: [
+          {
+            ruleId: 'rule-device-offline',
+            name: 'Device offline',
+            metric: 'device_status',
+            severity: 'warning',
+            enabled: true,
+          },
+        ],
+      });
+    }
+    if (path === '/alerts' && method === 'GET') {
+      const status = url.searchParams.get('status');
+      let alerts = fixture.alerts;
+      if (status) alerts = alerts.filter((a) => a.status === status);
+      return json({ message: 'Alerts', alerts });
+    }
+    {
+      const ackMatch = path.match(/^\/alerts\/([^/]+)\/ack$/);
+      if (ackMatch && method === 'POST') {
+        const alertId = ackMatch[1];
+        const alert = fixture.alerts.find((a) => a.alertId === alertId);
+        if (!alert) return json({ error: 'Alert not found' }, 404);
+        alert.status = 'acknowledged';
+        return json({ message: 'Alert acknowledged', alert: { ...alert } });
+      }
+    }
+    if (path === '/notifications' && method === 'GET') {
+      return json({ message: 'Notifications', notifications: fixture.notifications });
     }
     if (path === '/media' && method === 'GET') {
       return json({ media: fixture.media });
@@ -448,8 +495,17 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path === '/sessions' && method === 'POST') {
       return json({ session: { sessionId: 'session-new', status: 'active' }, message: 'Session created' }, 201);
     }
-    if (path === '/notifications/send') {
-      return json({ notificationId: 'n1', status: 'sent' }, 202);
+    if (path === '/notifications/send' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const item = {
+        notificationId: `notif-${fixture.notifications.length + 1}`,
+        userId: body.userId || 'user-demo-001',
+        channel: body.channel || 'email',
+        templateId: body.template || 'session_reminder',
+        status: 'queued',
+      };
+      fixture.notifications.unshift(item);
+      return json({ notificationId: item.notificationId, status: item.status, message: 'Notification queued' }, 202);
     }
     if (path === '/support/tickets' && method === 'GET') {
       return json({ tickets: fixture.tickets || [], message: 'Support tickets' });
