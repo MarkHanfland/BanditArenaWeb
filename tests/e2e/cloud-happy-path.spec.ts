@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi, mockConsoleApis } from '../helpers/mockApis';
+import { openMenuItem } from '../helpers/menuNav';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +12,7 @@ test('enrollment happy path: list users and add user', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText('Alex Runner')).toBeVisible();
   await page.getByTestId('add-user').click();
   await page.getByTestId('add-user-name').fill('New Demo User');
@@ -30,7 +31,7 @@ test('enrollment activate then start session for a pending user', async ({ page 
   // Wait for device ping + media auto-select before Users page startSession.
   await expect(page.getByTestId('header-media-select')).toHaveValue(/Alpine Trail/);
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText('Jordan Pending')).toBeVisible();
   await page.getByTestId('activate-user-demo-002').click();
   await expect(page.getByTestId('enrollment-message')).toContainText('Jordan Pending is now active');
@@ -47,7 +48,7 @@ test('enrollment suspend blocks a later cloud session start', async ({ page }) =
   await mockCloudApi(page, fixture);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await page.getByTestId('suspend-user-demo-001').click();
   await expect(page.getByTestId('enrollment-message')).toContainText('Alex Runner is now suspended');
   await page.getByTestId('start-session-user-demo-001').click();
@@ -60,7 +61,7 @@ test('session start on the device console starts the local session for an active
 
   await expect(page.getByTestId('header-media-select')).toHaveValue(/Alpine Trail/);
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText('Alex Runner')).toBeVisible();
   await page.getByTestId('start-session-user-demo-001').click();
   await expect(page.getByTestId('menu-dashboard')).toHaveClass(/Mui-selected/);
@@ -72,7 +73,7 @@ test('session start is blocked by the license gate for a non-active user', async
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText('Jordan Pending')).toBeVisible();
   await page.getByTestId('start-session-user-demo-002').click();
   await expect(page.getByText('Session blocked: enrollment not active')).toBeVisible();
@@ -82,7 +83,7 @@ test('content publish flow adds a VR title', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-media').click();
+  await openMenuItem(page, 'content', 'menu-media');
   await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
   await page.getByTestId('create-media').click();
   await page.getByLabel('Name').fill('Desert Dash');
@@ -98,7 +99,7 @@ test('SW-089: media cover upload uses asset-upload-token and objectKey PATCH onl
   await mockCloudApi(page, fixture);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-media').click();
+  await openMenuItem(page, 'content', 'menu-media');
   await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
   await page.getByTestId('edit-media-m1').click();
 
@@ -130,7 +131,7 @@ test('fleet register flow provisions a device', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-fleet').click();
+  await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
   await page.getByTestId('register-device').click();
   await page.getByTestId('register-compute-serial').fill('BA-COMPUTE-E2E-001');
@@ -144,7 +145,7 @@ test('fleet activate flow activates a provisioned device', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-fleet').click();
+  await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await page.getByTestId('fleet-row-i-provisioned').click();
   await page.getByRole('tab', { name: 'Lifecycle' }).click();
   await page.getByTestId('activate-i-provisioned').click();
@@ -155,7 +156,7 @@ test('reservation book flow confirms a slot and sets the next player', async ({ 
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-reservations').click();
+  await openMenuItem(page, 'operations', 'menu-reservations');
   await expect(page.getByRole('heading', { name: 'Reservations' })).toBeVisible();
   await page.getByTestId('book-slot-001').click();
   await expect(page.getByText(/Booked slot-001 for Alex Runner/)).toBeVisible();
@@ -166,7 +167,7 @@ test('staff assign role records a venue operator', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-staff').click();
+  await openMenuItem(page, 'operations', 'menu-staff');
   await expect(page.getByRole('heading', { name: 'Staff' })).toBeVisible();
   await page.getByTestId('staff-principal').fill('op@example.com');
   await page.getByTestId('staff-assign').click();
@@ -178,7 +179,7 @@ test('billing issue and revoke license', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-billing').click();
+  await openMenuItem(page, 'business', 'menu-billing');
   await expect(page.getByRole('heading', { name: 'Commerce' })).toBeVisible();
   await page.getByTestId('commerce-tab-licensing').click();
   await page.getByTestId('issue-license').click();
@@ -192,7 +193,7 @@ test('commerce offerings BOM and revenue tabs', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-billing').click();
+  await openMenuItem(page, 'business', 'menu-billing');
   await expect(page.getByTestId('commerce-offerings-table')).toBeVisible();
   await expect(page.getByText('BA-CORE-BUNDLE')).toBeVisible();
   await expect(page.getByText('BA-PRO-BUNDLE')).toBeVisible();
@@ -210,7 +211,7 @@ test('commerce spare order submits for a device', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-billing').click();
+  await openMenuItem(page, 'business', 'menu-billing');
   await page.getByTestId('commerce-create-order').click();
   // Default SKU is BA-SPARE-MEMBRANE; MUI Select puts data-testid on the hidden native input.
   await expect(page.getByTestId('order-sku')).toHaveValue('BA-SPARE-MEMBRANE');
@@ -222,7 +223,7 @@ test('analytics page shows summary cards', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-usage').click();
+  await openMenuItem(page, 'analytics', 'menu-usage');
   await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
   await expect(page.getByText('Sessions (7d)')).toBeVisible();
   await expect(page.getByTestId('analytics-sessions')).toHaveText('5');
@@ -235,7 +236,7 @@ test('SW-090: analytics alert ack and notification history', async ({ page }) =>
   await mockCloudApi(page, fixture);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-usage').click();
+  await openMenuItem(page, 'analytics', 'menu-usage');
   await expect(page.getByTestId('analytics-alert-alert-001')).toBeVisible();
   await expect(page.getByText('Device i1 is offline')).toBeVisible();
 
@@ -254,7 +255,7 @@ test('maintenance records an event for the selected device', async ({ page }) =>
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-fleet').click();
+  await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
   await page.getByTestId('fleet-row-i1').click();
   await page.getByTestId('fleet-tab-maintenance').click();
@@ -268,7 +269,7 @@ test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) 
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
-  await page.getByTestId('menu-fleet').click();
+  await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByTestId('fleet-map')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Neon Circuit' })).toBeVisible();
   await page.getByTestId('fleet-fleet-horizon-parks').click();

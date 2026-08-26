@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   CircularProgress,
+  Collapse,
   Divider,
   List,
   ListItemButton,
@@ -31,6 +32,26 @@ import InsightsIcon from '@mui/icons-material/Insights'
 import HubIcon from '@mui/icons-material/Hub'
 import MovieIcon from '@mui/icons-material/Movie'
 import EventIcon from '@mui/icons-material/Event'
+import ExpandLess from '@mui/icons-material/ExpandLess'
+import ExpandMore from '@mui/icons-material/ExpandMore'
+import TimelineIcon from '@mui/icons-material/Timeline'
+import NotificationsIcon from '@mui/icons-material/Notifications'
+import SystemUpdateAltIcon from '@mui/icons-material/SystemUpdateAlt'
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeart'
+import SupportAgentIcon from '@mui/icons-material/SupportAgent'
+import WifiIcon from '@mui/icons-material/Wifi'
+import CloudUploadIcon from '@mui/icons-material/CloudUpload'
+import VideoLibraryIcon from '@mui/icons-material/VideoLibrary'
+import CardMembershipIcon from '@mui/icons-material/CardMembership'
+import LocalOfferIcon from '@mui/icons-material/LocalOffer'
+import DevicesIcon from '@mui/icons-material/Devices'
+import TrendingUpIcon from '@mui/icons-material/TrendingUp'
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import ApiIcon from '@mui/icons-material/Api'
+import PaletteIcon from '@mui/icons-material/Palette'
+import FactCheckIcon from '@mui/icons-material/FactCheck'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 
 import DashboardTab from './pages/device/DashboardTab'
 import UserTab from './pages/device/UserTab'
@@ -66,31 +87,83 @@ import {
   getAuthInfo,
 } from './api/device'
 import { setCloudAuthToken, clearCloudAuthToken, setCloudTenantId } from './api/cloud'
+import {
+  MENU_GROUP,
+  MENU_LEAF_CATALOG,
+  buildMenuGroups,
+  findGroupIdForItem,
+  firstCloudLanding,
+  initialExpandedGroupIds,
+} from './nav/consoleMenu'
 
-const DEVICE_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard', icon: <DashboardIcon />, panel: (props) => <DashboardTab {...props} /> },
-  { id: 'user', label: 'User', icon: <PersonIcon />, panel: (props) => <UserTab {...props} /> },
-  { id: 'treadmill', label: 'Treadmill', icon: <SpeedIcon />, panel: (props) => <TreadmillTab {...props} /> },
-  { id: 'services', label: 'Services', icon: <DeviceHubIcon />, panel: (props) => <ServicesTab {...props} /> },
-  { id: 'events', label: 'Events', icon: <ReportProblemIcon />, panel: (props) => <EventsTab {...props} /> },
-  { id: 'config', label: 'Config', icon: <TuneIcon />, panel: (props) => <ConfigurationTab {...props} /> },
-]
+const DEVICE_ITEM_IDS = new Set(['dashboard', 'user', 'treadmill', 'services', 'events', 'config'])
 
-const CLOUD_ITEMS = [
-  { id: 'media', label: 'Media', icon: <MovieIcon />, panel: () => <MediaPage /> },
-  { id: 'users', label: 'Enrollment', icon: <GroupIcon />, panel: () => <UsersPage /> },
-  { id: 'reservations', label: 'Reservations', icon: <EventIcon />, panel: () => <ReservationsPage /> },
-  { id: 'staff', label: 'Staff', icon: <ManageAccountsIcon />, panel: () => <StaffPage /> },
-  { id: 'organizations', label: 'Organizations', icon: <BusinessIcon />, panel: () => <OrganizationsPage /> },
-  { id: 'billing', label: 'Commerce', icon: <PaymentsIcon />, panel: () => <BillingPage /> },
-  { id: 'usage', label: 'Analytics', icon: <InsightsIcon />, panel: () => <UsagePage /> },
-  { id: 'fleet', label: 'Fleet', icon: <HubIcon />, panel: () => <FleetPage /> },
-]
+const IMPLEMENTED_PANELS = {
+  dashboard: (props) => <DashboardTab {...props} />,
+  user: (props) => <UserTab {...props} />,
+  treadmill: (props) => <TreadmillTab {...props} />,
+  services: (props) => <ServicesTab {...props} />,
+  events: (props) => <EventsTab {...props} />,
+  config: (props) => <ConfigurationTab {...props} />,
+  media: () => <MediaPage />,
+  users: () => <UsersPage />,
+  reservations: () => <ReservationsPage />,
+  staff: () => <StaffPage />,
+  organizations: () => <OrganizationsPage />,
+  billing: () => <BillingPage />,
+  usage: () => <UsagePage />,
+  fleet: () => <FleetPage />,
+}
 
-const MENU_GROUPS = [
-  { id: 'local', label: 'Local Treadmill Device', items: DEVICE_ITEMS },
-  { id: 'cloud', label: 'Cloud Management', items: CLOUD_ITEMS },
-]
+const MENU_ICONS = {
+  dashboard: <DashboardIcon />,
+  user: <PersonIcon />,
+  treadmill: <SpeedIcon />,
+  services: <DeviceHubIcon />,
+  events: <ReportProblemIcon />,
+  config: <TuneIcon />,
+  reservations: <EventIcon />,
+  users: <GroupIcon />,
+  staff: <ManageAccountsIcon />,
+  sessions: <TimelineIcon />,
+  notifications: <NotificationsIcon />,
+  fleet: <HubIcon />,
+  firmware: <SystemUpdateAltIcon />,
+  diagnostics: <MonitorHeartIcon />,
+  support: <SupportAgentIcon />,
+  network: <WifiIcon />,
+  media: <MovieIcon />,
+  'media-uploads': <CloudUploadIcon />,
+  'session-recordings': <VideoLibraryIcon />,
+  billing: <PaymentsIcon />,
+  organizations: <BusinessIcon />,
+  subscriptions: <CardMembershipIcon />,
+  pricing: <LocalOfferIcon />,
+  usage: <InsightsIcon />,
+  'device-analytics': <DevicesIcon />,
+  'experience-analytics': <TrendingUpIcon />,
+  'revenue-analytics': <AttachMoneyIcon />,
+  roles: <AdminPanelSettingsIcon />,
+  integrations: <ApiIcon />,
+  branding: <PaletteIcon />,
+  audit: <FactCheckIcon />,
+}
+
+const ITEMS_BY_ID = Object.fromEntries(
+  MENU_LEAF_CATALOG.map((leaf) => [
+    leaf.id,
+    {
+      id: leaf.id,
+      label: leaf.label,
+      implemented: leaf.implemented,
+      phase: leaf.phase || null,
+      icon: MENU_ICONS[leaf.id] || <LockOutlinedIcon />,
+      panel: IMPLEMENTED_PANELS[leaf.id] || null,
+    },
+  ]),
+)
+
+const MENU_GROUPS = buildMenuGroups(ITEMS_BY_ID)
 
 function TabPanel({ children, isActive, noPadding = false, scrollable = false }) {
   return (
@@ -140,6 +213,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   const [safetyActionBusy, setSafetyActionBusy] = useState(false)
   const [safetyStopLatched, setSafetyStopLatched] = useState(false)
   const [safetyActionPending, setSafetyActionPending] = useState(null)
+  const [expandedGroups, setExpandedGroups] = useState(() => initialExpandedGroupIds(deviceOnline))
 
   const visibleMenuGroups = useMemo(
     () => (user ? filterMenuGroups(MENU_GROUPS, user) : MENU_GROUPS),
@@ -150,24 +224,77 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     [visibleMenuGroups],
   )
   const activeItem = allItems.find((item) => item.id === activeTab) || allItems[0]
-  const isDeviceTab = DEVICE_ITEMS.some((item) => item.id === activeTab)
+  const isDeviceTab = DEVICE_ITEM_IDS.has(activeTab)
+
+  const expandGroup = useCallback((groupId) => {
+    if (!groupId) return
+    setExpandedGroups((prev) => {
+      if (prev.has(groupId)) return prev
+      const next = new Set(prev)
+      next.add(groupId)
+      return next
+    })
+  }, [])
+
+  const toggleGroup = useCallback((groupId) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }, [])
+
+  const selectMenuItem = useCallback(
+    (itemId) => {
+      const item = allItems.find((entry) => entry.id === itemId)
+      if (!item || item.implemented === false) return
+      const groupId = findGroupIdForItem(visibleMenuGroups, itemId)
+      expandGroup(groupId)
+      setActiveTab(itemId)
+    },
+    [allItems, expandGroup, setActiveTab, visibleMenuGroups],
+  )
+
+  // Sync default expand when local reachability flips (FR-SW-UI-009).
+  useEffect(() => {
+    if (deviceOnline === false) {
+      setExpandedGroups((prev) => {
+        const next = new Set(prev)
+        next.delete(MENU_GROUP.LOCAL)
+        return next
+      })
+      return
+    }
+    if (deviceOnline === true) {
+      expandGroup(MENU_GROUP.LOCAL)
+    }
+  }, [deviceOnline, expandGroup])
 
   useEffect(() => {
     if (!allItems.some((item) => item.id === activeTab)) {
       setActiveTab(allItems[0]?.id || 'dashboard')
     }
-  }, [allItems, activeTab])
+  }, [allItems, activeTab, setActiveTab])
+
+  // Keep the active item's pillar open (e.g. after Start Session → Dashboard).
+  useEffect(() => {
+    const groupId = findGroupIdForItem(visibleMenuGroups, activeTab)
+    if (groupId === MENU_GROUP.LOCAL && deviceOnline === false) return
+    expandGroup(groupId)
+  }, [activeTab, visibleMenuGroups, expandGroup, deviceOnline])
 
   // When the local unit is offline, leave Local Device routes and land on cloud.
   useEffect(() => {
     if (deviceOnline !== false || !isDeviceTab) {
       return
     }
-    const cloudFirst = visibleMenuGroups.find((group) => group.id === 'cloud')?.items?.[0]
-    if (cloudFirst) {
-      setActiveTab(cloudFirst.id)
+    const landing = firstCloudLanding(visibleMenuGroups)
+    if (landing) {
+      expandGroup(landing.groupId)
+      setActiveTab(landing.itemId)
     }
-  }, [deviceOnline, isDeviceTab, visibleMenuGroups])
+  }, [deviceOnline, isDeviceTab, visibleMenuGroups, expandGroup, setActiveTab])
 
   const isSafetyStopState = treadmillState === 3
   const isOperatingState = treadmillState === 2
@@ -301,7 +428,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     if (activeTab === 'user' && phase === SESSION_PHASE.idle) {
       setActiveTab('dashboard')
     }
-  }, [activeTab, phase])
+  }, [activeTab, phase, setActiveTab])
 
   const handleSafetyAction = showSafetyStart ? handleSafetyStart : handleSafetyStop
 
@@ -383,67 +510,79 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
           }}
         >
           {visibleMenuGroups.map((group, groupIndex) => {
-            const localOffline = group.id === 'local' && deviceOnline === false
+            const localOffline = group.id === MENU_GROUP.LOCAL && deviceOnline === false
             const items = localOffline ? [] : group.items
+            const expanded = !localOffline && expandedGroups.has(group.id)
+            const canToggle = !localOffline && items.length > 0
             return (
-            <Box key={group.id} data-testid={group.id === 'local' ? 'menu-group-local' : `menu-group-${group.id}`}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  px: 2,
-                  pt: groupIndex === 0 ? 2 : 1,
-                  pb: 1,
-                }}
-              >
-                <Typography
-                  variant="overline"
+              <Box key={group.id} data-testid={`menu-group-${group.id}`}>
+                <ListItemButton
+                  onClick={() => canToggle && toggleGroup(group.id)}
+                  disabled={!canToggle && localOffline}
                   sx={{
-                    color: 'text.secondary',
-                    letterSpacing: 1,
-                    fontWeight: 700,
-                    lineHeight: 1.5,
+                    mx: 1,
+                    mt: groupIndex === 0 ? 1.5 : 0.5,
+                    borderRadius: 1,
+                    py: 0.75,
                   }}
+                  data-testid={`menu-group-toggle-${group.id}`}
+                  aria-expanded={expanded}
                 >
-                  {group.label}
-                </Typography>
-                {localOffline && (
-                  <Chip
-                    size="small"
-                    label="Offline"
-                    data-testid="menu-local-offline"
-                    sx={{ height: 20, fontSize: '0.65rem' }}
+                  <ListItemText
+                    primary={group.label}
+                    primaryTypographyProps={{
+                      variant: 'overline',
+                      sx: {
+                        color: 'text.secondary',
+                        letterSpacing: 1,
+                        fontWeight: 700,
+                        lineHeight: 1.5,
+                      },
+                    }}
                   />
-                )}
+                  {localOffline && (
+                    <Chip
+                      size="small"
+                      label="Offline"
+                      data-testid="menu-local-offline"
+                      sx={{ height: 20, fontSize: '0.65rem', mr: 0.5 }}
+                    />
+                  )}
+                  {canToggle ? (expanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />) : null}
+                </ListItemButton>
+                <Collapse in={expanded} timeout="auto" unmountOnExit>
+                  <List dense sx={{ pt: 0, pb: 0.5 }}>
+                    {items.map((item) => {
+                      const isUserTab = item.id === 'user'
+                      const notImplemented = item.implemented === false
+                      const disabled = notImplemented || (isUserTab && !userTabEnabled)
+                      let secondary
+                      if (notImplemented) {
+                        secondary = item.phase ? `Coming soon · ${item.phase}` : 'Coming soon'
+                      } else if (isUserTab) {
+                        secondary = userTabSecondary
+                      }
+                      return (
+                        <ListItemButton
+                          key={item.id}
+                          selected={!notImplemented && activeTab === item.id}
+                          disabled={disabled}
+                          onClick={() => selectMenuItem(item.id)}
+                          sx={{ mx: 1, borderRadius: 1, pl: 2.5 }}
+                          data-testid={`menu-${item.id}`}
+                          data-implemented={notImplemented ? 'false' : 'true'}
+                        >
+                          <ListItemIcon sx={{ minWidth: 36 }}>
+                            {notImplemented ? <LockOutlinedIcon fontSize="small" /> : item.icon}
+                          </ListItemIcon>
+                          <ListItemText primary={item.label} secondary={secondary} />
+                        </ListItemButton>
+                      )
+                    })}
+                  </List>
+                </Collapse>
+                {groupIndex < visibleMenuGroups.length - 1 && <Divider sx={{ mt: 0.5 }} />}
               </Box>
-              {items.length > 0 && (
-              <List dense sx={{ pt: 0 }}>
-                {items.map((item) => {
-                  const isUserTab = item.id === 'user'
-                  const disabled = isUserTab && !userTabEnabled
-                  let secondary
-                  if (isUserTab) {
-                    secondary = userTabSecondary
-                  }
-                  return (
-                    <ListItemButton
-                      key={item.id}
-                      selected={activeTab === item.id}
-                      disabled={disabled}
-                      onClick={() => setActiveTab(item.id)}
-                      sx={{ mx: 1, borderRadius: 1 }}
-                      data-testid={`menu-${item.id}`}
-                    >
-                      <ListItemIcon sx={{ minWidth: 36 }}>{item.icon}</ListItemIcon>
-                      <ListItemText primary={item.label} secondary={secondary} />
-                    </ListItemButton>
-                  )
-                })}
-              </List>
-              )}
-              {groupIndex < visibleMenuGroups.length - 1 && <Divider sx={{ mt: 1 }} />}
-            </Box>
             )
           })}
         </Box>

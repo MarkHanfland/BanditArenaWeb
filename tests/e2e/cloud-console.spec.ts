@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { getTestAdministratorUser } from '../helpers/testCredentials';
 import { mockCloudApi } from '../helpers/mockApis';
+import { openMenuItem } from '../helpers/menuNav';
 
 test('cloud console Start Session creates a record and does not claim the belt started', async ({ page }) => {
   await mockCloudApi(page);
@@ -12,7 +13,7 @@ test('cloud console Start Session creates a record and does not claim the belt s
   await page.getByRole('option', { name: admin.label }).click();
   await page.getByTestId('login-submit').click();
 
-  await page.getByTestId('menu-users').click();
+  await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText(/Creating a cloud session does not start the treadmill/)).toBeVisible();
   await page.getByTestId('start-session-user-demo-001').click();
   await expect(page.getByTestId('enrollment-message')).toContainText(

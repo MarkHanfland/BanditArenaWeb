@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { signInAsVenueAdmin } from '../helpers/auth';
 import { mockConsoleApis, createCloudFixture } from '../helpers/mockApis';
 import { selectEnrolledPlayer } from '../helpers/selectPlayer';
+import { openMenuItem } from '../helpers/menuNav';
 
 test('device dashboard, user, treadmill, events, services, and config pages load', async ({ page }) => {
   await mockConsoleApis(page);
@@ -50,7 +51,7 @@ test('header session start and end for an enrolled player', async ({ page }) => 
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
   await selectEnrolledPlayer(page, /Alex Runner/, { userId: 'user-demo-001' });
 
-  await page.getByTestId('menu-media').click();
+  await openMenuItem(page, 'content', 'menu-media');
   await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
 
   await page.getByTestId('header-session-start').click();
