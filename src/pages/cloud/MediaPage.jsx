@@ -537,6 +537,7 @@ export default function MediaPage() {
                 size="small"
                 disabled={Boolean(uploading)}
                 onClick={() => imageInputRef.current?.click()}
+                data-testid="upload-media-image"
               >
                 {uploading === 'image' ? 'Uploading…' : 'Upload image'}
               </Button>
@@ -545,6 +546,7 @@ export default function MediaPage() {
                 type="file"
                 accept="image/*"
                 hidden
+                data-testid="upload-media-image-input"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ''

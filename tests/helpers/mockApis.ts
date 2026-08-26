@@ -77,6 +77,7 @@ export function createCloudFixture() {
       name: 'Alpine Trail',
       description: 'Demo',
       cover: 'https://placehold.co/200x120',
+      image: 'https://placehold.co/200x120',
       pricePerMinute: 0.1,
       version: 1,
     },
@@ -115,6 +116,7 @@ export function createCloudFixture() {
     licenses,
     reservations,
     media,
+    lastMediaPatch: null as { mediaId: string; body: Record<string, unknown> } | null,
     instances,
     maintenance,
     tickets,
@@ -127,6 +129,14 @@ export function createCloudFixture() {
 export type CloudFixture = ReturnType<typeof createCloudFixture>;
 
 export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixture()) {
+  // SW-089: browser PutObject to presigned S3 URL (not under /api).
+  await page.route('https://s3.mock.local/**', async (route) => {
+    if (route.request().method() === 'PUT') {
+      return route.fulfill({ status: 200, body: '' });
+    }
+    return route.fallback();
+  });
+
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api/, '') || '/';
@@ -277,9 +287,73 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         description: body.description,
         pricePerMinute: body.pricePerMinute,
         version: 1,
+        cover: body.cover || '',
+        image: body.image || body.cover || '',
       };
       fixture.media.push(item);
       return json({ media: item, message: 'Content published' }, 201);
+    }
+    {
+      const assetUploadMatch = path.match(/^\/media\/([^/]+)\/asset-upload-token$/);
+      if (assetUploadMatch && method === 'POST') {
+        const mediaId = assetUploadMatch[1];
+        const body = route.request().postDataJSON() || {};
+        const assetType = body.assetType === 'demoVideo' ? 'demoVideo' : 'image';
+        const ext =
+          typeof body.fileName === 'string' && body.fileName.includes('.')
+            ? body.fileName.split('.').pop()
+            : assetType === 'demoVideo'
+              ? 'mp4'
+              : 'png';
+        const objectKey = `media-assets/${mediaId}/${assetType}/e2e.${ext}`;
+        const uploadUrl = `https://s3.mock.local/${objectKey}`;
+        return json({
+          message: 'Media asset upload token issued',
+          uploadToken: 'e2e-upload-token',
+          mediaId,
+          assetType,
+          objectKey,
+          uploadUrl,
+          contentType: body.contentType || 'application/octet-stream',
+          expiresInSeconds: 900,
+          issuedAt: new Date().toISOString(),
+          source: 's3',
+          publicUrl: null,
+        });
+      }
+    }
+    {
+      const mediaPatchMatch = path.match(/^\/media\/([^/]+)$/);
+      if (mediaPatchMatch && method === 'PATCH') {
+        const mediaId = mediaPatchMatch[1];
+        const body = route.request().postDataJSON() || {};
+        const item = fixture.media.find((entry) => entry.mediaId === mediaId);
+        if (!item) {
+          return json({ error: 'Media not found' }, 404);
+        }
+        // Capture last PATCH for Playwright assertions (no multi-MB data URLs).
+        fixture.lastMediaPatch = { mediaId, body };
+        if (body.imageObjectKey != null) {
+          item.imageObjectKey = body.imageObjectKey;
+          const signed = `https://signed.mock.local/${body.imageObjectKey}`;
+          item.image = signed;
+          item.cover = signed;
+        } else {
+          if (body.image != null) item.image = body.image;
+          if (body.cover != null) item.cover = body.cover;
+        }
+        if (body.demoVideoObjectKey != null) {
+          item.demoVideoObjectKey = body.demoVideoObjectKey;
+          item.demoVideo = `https://signed.mock.local/${body.demoVideoObjectKey}`;
+        } else if (body.demoVideo != null) {
+          item.demoVideo = body.demoVideo;
+        }
+        if (body.name != null) item.name = body.name;
+        if (body.description != null) item.description = body.description;
+        if (body.objectKey != null) item.objectKey = body.objectKey;
+        if (body.version != null) item.version = body.version;
+        return json({ media: { ...item }, message: 'Media updated' });
+      }
     }
     if (path === '/product-instances' && method === 'GET') {
       return json({ instances: fixture.instances });

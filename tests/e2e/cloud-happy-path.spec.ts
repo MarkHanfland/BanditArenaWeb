@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi, mockConsoleApis } from '../helpers/mockApis';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 test('enrollment happy path: list users and add user', async ({ page }) => {
   await mockCloudApi(page);
@@ -74,6 +79,41 @@ test('content publish flow adds a VR title', async ({ page }) => {
   await page.getByLabel('Description').fill('A demo VR trail');
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByText(/Created Desert Dash|Desert Dash/)).toBeVisible();
+});
+
+test('SW-089: media cover upload uses asset-upload-token and objectKey PATCH only', async ({
+  page,
+}) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsVenueAdmin(page);
+
+  await page.getByTestId('menu-media').click();
+  await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
+  await page.getByTestId('edit-media-m1').click();
+
+  const coverPath = path.join(__dirname, '../fixtures/cover-sw089.png');
+  expect(fs.existsSync(coverPath)).toBeTruthy();
+
+  await page.getByTestId('upload-media-image-input').setInputFiles(coverPath);
+  await expect(page.getByText('Image uploaded')).toBeVisible();
+
+  expect(fixture.lastMediaPatch).toBeTruthy();
+  expect(fixture.lastMediaPatch?.mediaId).toBe('m1');
+  const patchBody = fixture.lastMediaPatch?.body || {};
+  expect(patchBody.imageObjectKey).toMatch(/^media-assets\/m1\/image\//);
+  expect(patchBody.image).toBeUndefined();
+  expect(JSON.stringify(patchBody)).not.toMatch(/data:image/);
+
+  const m1 = fixture.media.find((entry) => entry.mediaId === 'm1');
+  expect(m1?.imageObjectKey).toBe(patchBody.imageObjectKey);
+  expect(String(m1?.image || '')).toContain('signed.mock.local');
+  expect(String(m1?.image || '')).not.toMatch(/^data:/);
+
+  await expect(page.locator('img[alt="Preview"]')).toHaveAttribute(
+    'src',
+    /signed\.mock\.local|blob:/,
+  );
 });
 
 test('fleet register flow provisions a device', async ({ page }) => {
