@@ -21,7 +21,6 @@ export const MENU_GROUP = {
 export const MENU_LEAF_CATALOG = [
   // Local Device (Alpha)
   { id: 'dashboard', groupId: MENU_GROUP.LOCAL, label: 'Dashboard', implemented: true },
-  { id: 'user', groupId: MENU_GROUP.LOCAL, label: 'User', implemented: true },
   { id: 'treadmill', groupId: MENU_GROUP.LOCAL, label: 'Treadmill', implemented: true },
   { id: 'services', groupId: MENU_GROUP.LOCAL, label: 'Services', implemented: true },
   { id: 'events', groupId: MENU_GROUP.LOCAL, label: 'Events', implemented: true },

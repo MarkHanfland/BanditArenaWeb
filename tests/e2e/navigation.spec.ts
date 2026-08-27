@@ -19,7 +19,6 @@ test('offline local device collapses Local Device and shows header indicator onl
 
   for (const menuId of [
     'menu-dashboard',
-    'menu-user',
     'menu-treadmill',
     'menu-services',
     'menu-events',

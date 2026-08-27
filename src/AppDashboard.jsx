@@ -15,7 +15,6 @@ import {
   Typography,
 } from '@mui/material'
 import DashboardIcon from '@mui/icons-material/Dashboard'
-import PersonIcon from '@mui/icons-material/Person'
 import SpeedIcon from '@mui/icons-material/Speed'
 import DeviceHubIcon from '@mui/icons-material/DeviceHub'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
@@ -54,7 +53,6 @@ import FactCheckIcon from '@mui/icons-material/FactCheck'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 
 import DashboardTab from './pages/device/DashboardTab'
-import UserTab from './pages/device/UserTab'
 import TreadmillTab from './pages/device/TreadmillTab'
 import ServicesTab from './pages/device/ServicesTab'
 import EventsTab from './pages/device/EventsTab'
@@ -97,11 +95,10 @@ import {
   initialExpandedGroupIds,
 } from './nav/consoleMenu'
 
-const DEVICE_ITEM_IDS = new Set(['dashboard', 'user', 'treadmill', 'services', 'events', 'config'])
+const DEVICE_ITEM_IDS = new Set(['dashboard', 'treadmill', 'services', 'events', 'config'])
 
 const IMPLEMENTED_PANELS = {
   dashboard: (props) => <DashboardTab {...props} />,
-  user: (props) => <UserTab {...props} />,
   treadmill: (props) => <TreadmillTab {...props} />,
   services: (props) => <ServicesTab {...props} />,
   events: (props) => <EventsTab {...props} />,
@@ -119,7 +116,6 @@ const IMPLEMENTED_PANELS = {
 
 const MENU_ICONS = {
   dashboard: <DashboardIcon />,
-  user: <PersonIcon />,
   treadmill: <SpeedIcon />,
   services: <DeviceHubIcon />,
   events: <ReportProblemIcon />,
@@ -210,7 +206,7 @@ export default function Dashboard() {
 
 function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   const { accessToken, cloudAuthToken, idToken, user, logout, refreshAccessToken, login } = useAuth()
-  const { phase, sessionActive } = usePlayerSession()
+  const { sessionActive } = usePlayerSession()
   const [treadmillState, setTreadmillState] = useState(null)
   const [safetyActionBusy, setSafetyActionBusy] = useState(false)
   const [safetyStopLatched, setSafetyStopLatched] = useState(false)
@@ -426,20 +422,6 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     safetyButtonLabel = 'Starting...'
   }
 
-  const userTabEnabled = phase !== SESSION_PHASE.idle
-  const userTabSecondary =
-    phase === SESSION_PHASE.pending
-      ? 'pending start'
-      : phase === SESSION_PHASE.active
-        ? 'active session'
-        : 'no session'
-
-  useEffect(() => {
-    if (activeTab === 'user' && phase === SESSION_PHASE.idle) {
-      setActiveTab('dashboard')
-    }
-  }, [activeTab, phase, setActiveTab])
-
   const handleSafetyAction = showSafetyStart ? handleSafetyStart : handleSafetyStop
 
   return (
@@ -563,20 +545,17 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
                 <Collapse in={expanded} timeout="auto" unmountOnExit>
                   <List dense sx={{ pt: 0, pb: 0.5 }}>
                     {items.map((item) => {
-                      const isUserTab = item.id === 'user'
                       const notImplemented = item.implemented === false
-                      const disabled = notImplemented || (isUserTab && !userTabEnabled)
-                      let secondary
-                      if (notImplemented) {
-                        secondary = item.phase ? `Coming soon · ${item.phase}` : 'Coming soon'
-                      } else if (isUserTab) {
-                        secondary = userTabSecondary
-                      }
+                      const secondary = notImplemented
+                        ? item.phase
+                          ? `Coming soon · ${item.phase}`
+                          : 'Coming soon'
+                        : undefined
                       return (
                         <ListItemButton
                           key={item.id}
                           selected={!notImplemented && activeTab === item.id}
-                          disabled={disabled}
+                          disabled={notImplemented}
                           onClick={() => selectMenuItem(item.id)}
                           sx={{ mx: 1, borderRadius: 1, pl: 2.5 }}
                           data-testid={`menu-${item.id}`}

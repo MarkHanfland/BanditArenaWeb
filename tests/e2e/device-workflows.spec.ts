@@ -4,7 +4,7 @@ import { mockConsoleApis, createCloudFixture } from '../helpers/mockApis';
 import { selectEnrolledPlayer } from '../helpers/selectPlayer';
 import { openMenuItem } from '../helpers/menuNav';
 
-test('device dashboard, user, treadmill, events, services, and config pages load', async ({ page }) => {
+test('device dashboard, treadmill, events, services, and config pages load', async ({ page }) => {
   await mockConsoleApis(page);
   await signInAsVenueAdmin(page);
 
@@ -18,16 +18,10 @@ test('device dashboard, user, treadmill, events, services, and config pages load
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
   await expect(page.getByText('OPENXR DRIVER')).toBeVisible();
   await expect(page.getByText('OPENXR RUNTIME')).toHaveCount(0);
-  await expect(page.getByTestId('menu-user')).toBeDisabled();
+  await expect(page.getByTestId('menu-user')).toHaveCount(0);
 
   await selectEnrolledPlayer(page, /Alex Runner/, { userId: 'user-demo-001' });
-  await expect(page.getByTestId('menu-user')).toBeEnabled();
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
-
-  await page.getByTestId('menu-user').click();
-  await expect(page.getByTestId('user-tab-pending')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pending session start' })).toBeVisible();
-  await expect(page.getByTestId('player-select')).toBeVisible();
 
   await page.getByTestId('menu-treadmill').click();
   await expect(page.getByText('Treadmill Status')).toBeVisible();
@@ -60,15 +54,9 @@ test('header session start and end for an enrolled player', async ({ page }) => 
   await expect(page.getByTestId('dashboard-vr-position')).toBeVisible();
   await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
   await expect(page.getByTestId('dashboard-session-time')).toHaveText(/\d+:\d{2}/);
-  await expect(page.getByTestId('menu-user')).toBeEnabled();
-
-  await page.getByTestId('menu-user').click();
-  await expect(page.getByTestId('user-tab-active')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Active session' })).toBeVisible();
 
   await page.getByTestId('header-session-end').click();
   await expect(page.getByTestId('header-player-select')).toBeVisible();
-  await expect(page.getByTestId('menu-user')).toBeEnabled();
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
 });
 
