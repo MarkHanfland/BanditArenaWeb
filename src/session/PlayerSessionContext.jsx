@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react'
 import { endSession, getCurrentSession, startSession } from '../api/device'
-import { listMedia, listUsers } from '../api/cloud'
+import { createSession, closeSession, listMedia, listUsers } from '../api/cloud'
 import { readLastPlayers, rememberPlayer } from './lastPlayers'
 import { formatSessionClock, sessionPhaseFrom, SESSION_PHASE, SESSION_PHASE_LABEL } from './playerSessionPhase'
 
@@ -26,6 +26,8 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
   const [nowMs, setNowMs] = useState(() => Date.now())
   const clientStartedAtRef = useRef(null)
   const pollGenerationRef = useRef(0)
+  /** Cloud Session History record opened alongside the device run (admin Cognito). */
+  const cloudSessionIdRef = useRef(null)
 
   const refreshSession = useCallback(async () => {
     const generation = pollGenerationRef.current
@@ -216,6 +218,30 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       setBusy(false)
       return false
     }
+
+    // Session History is cloud-backed. When the device already linked a cloud session
+    // (device cloud + identity), reuse it. Otherwise open a Cognito session record so
+    // lab runs still appear under Operations → Session History.
+    cloudSessionIdRef.current = null
+    if (data?.cloudLinked && data?.sessionId) {
+      cloudSessionIdRef.current = data.sessionId
+    } else {
+      const cloudOpen = await createSession({
+        userId,
+        mediaId,
+        banditProductId: 'product-demo-treadmill',
+        clientOpenKey: data?.sessionId || `console-${userId}-${Date.now()}`,
+      })
+      if (cloudOpen.error) {
+        setMessage(
+          data?.cloudWarning
+            || `Device session started; Session History record failed: ${cloudOpen.error}`,
+        )
+      } else if (cloudOpen.data?.session?.sessionId) {
+        cloudSessionIdRef.current = cloudOpen.data.session.sessionId
+      }
+    }
+
     pollGenerationRef.current += 1
     clientStartedAtRef.current = Number(data?.startedAt) || Date.now()
     setNowMs(Date.now())
@@ -229,7 +255,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     if (data?.mediaId) {
       setSelectedMediaId(data.mediaId)
     }
-    if (data?.cloudWarning) {
+    if (data?.cloudWarning && !cloudOpen.error) {
       setMessage(data.cloudWarning)
     }
     setBusy(false)
@@ -253,6 +279,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     setBusy(true)
     setMessage('')
     pollGenerationRef.current += 1
+    const cloudSessionId = cloudSessionIdRef.current
     const { data, error } = await endSession()
     if (error) {
       setMessage(error)
@@ -260,6 +287,13 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       setSession(data)
       setSelected(null)
       clientStartedAtRef.current = null
+      if (cloudSessionId) {
+        const closed = await closeSession(cloudSessionId, {})
+        if (closed.error) {
+          setMessage(`Session ended on device; Session History close failed: ${closed.error}`)
+        }
+      }
+      cloudSessionIdRef.current = null
     }
     setBusy(false)
   }, [])

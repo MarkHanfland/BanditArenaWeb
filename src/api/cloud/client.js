@@ -331,6 +331,10 @@ export async function createSession(payload) {
   return request(() => cloudApi.post('/sessions', payload))
 }
 
+export async function closeSession(sessionId, payload = {}) {
+  return request(() => cloudApi.post(`/sessions/${sessionId}/close`, payload))
+}
+
 export async function getSession(sessionId) {
   return request(() => cloudApi.get(`/sessions/${sessionId}`))
 }

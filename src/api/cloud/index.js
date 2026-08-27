@@ -45,6 +45,7 @@ export {
   createDeviceMaintenance,
   getProductComponents,
   createSession,
+  closeSession,
   getSession,
   getSessionMetrics,
   getSessionSafetyEvents,
