@@ -350,6 +350,11 @@ function ConfigurationTab({ treadmillState = null }) {
       if (apiError || !data) {
         throw new Error(apiError || 'Failed to load configuration')
       }
+      // Diameter is canonical; drop derived radius if an older Arena build still emits it.
+      if (data?.tread && Object.prototype.hasOwnProperty.call(data.tread, 'radius_meters')) {
+        const { radius_meters: _drop, ...tread } = data.tread
+        data.tread = tread
+      }
       setConfig(data)
       setOriginalConfig(JSON.parse(JSON.stringify(data)))
       setHasChanges(false)

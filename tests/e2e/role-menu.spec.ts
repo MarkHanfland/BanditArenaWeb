@@ -13,7 +13,7 @@ type RoleCase = {
 const roleCases: RoleCase[] = [
   {
     roleId: 'operator',
-    expected: ['menu-dashboard', 'menu-user', 'menu-treadmill', 'menu-events'],
+    expected: ['menu-dashboard', 'menu-treadmill', 'menu-events'],
     expectedDisabled: [],
     notExpected: [
       'menu-config',
@@ -64,7 +64,6 @@ const roleCases: RoleCase[] = [
     roleId: 'venueAdmin',
     expected: [
       'menu-dashboard',
-      'menu-user',
       'menu-treadmill',
       'menu-services',
       'menu-events',
