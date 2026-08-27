@@ -21,32 +21,33 @@ import {
 import PageScaffold from '../../components/shared/PageScaffold'
 import {
   createCustomer,
-  createTenant,
+  createOperator,
   createVenue,
   deactivateCustomer,
-  deactivateTenant,
+  deactivateOperator,
   deactivateVenue,
   listCustomers,
-  listTenants,
+  listOperators,
   listVenues,
   patchCustomer,
-  patchTenant,
+  patchOperator,
   patchVenue,
 } from '../../api/cloud'
 
+/** Product entities: Customer, Operator, Venue (`/operators`, `operatorId`). */
 const TABS = [
   { id: 'customers', label: 'Customers' },
-  { id: 'tenants', label: 'Operator tenants' },
+  { id: 'operators', label: 'Operators' },
   { id: 'venues', label: 'Venues' },
 ]
 
-export default function OrganizationsPage() {
+export default function AccountsPage() {
   const [tab, setTab] = useState('customers')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [customers, setCustomers] = useState([])
-  const [tenants, setTenants] = useState([])
+  const [operators, setOperators] = useState([])
   const [venues, setVenues] = useState([])
   const [name, setName] = useState('')
   const [ownerCustomerId, setOwnerCustomerId] = useState('')
@@ -60,20 +61,20 @@ export default function OrganizationsPage() {
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [customersRes, tenantsRes, venuesRes] = await Promise.all([
+    const [customersRes, operatorsRes, venuesRes] = await Promise.all([
       listCustomers(),
-      listTenants(),
+      listOperators(),
       listVenues(),
     ])
-    const firstError = customersRes.error || tenantsRes.error || venuesRes.error
-    if (firstError && !customersRes.data && !tenantsRes.data && !venuesRes.data) {
+    const firstError = customersRes.error || operatorsRes.error || venuesRes.error
+    if (firstError && !customersRes.data && !operatorsRes.data && !venuesRes.data) {
       setError(firstError)
       setLoading(false)
       return
     }
     const nextCustomers = customersRes.data?.customers || []
     setCustomers(nextCustomers)
-    setTenants(tenantsRes.data?.tenants || [])
+    setOperators(operatorsRes.data?.operators || [])
     setVenues(venuesRes.data?.venues || [])
     setOwnerCustomerId((current) => current || nextCustomers[0]?.customerId || '')
     setLoading(false)
@@ -90,11 +91,11 @@ export default function OrganizationsPage() {
     let result
     if (tab === 'customers') {
       result = await createCustomer({ name: trimmed })
-    } else if (tab === 'tenants') {
-      result = await createTenant({ name: trimmed })
+    } else if (tab === 'operators') {
+      result = await createOperator({ name: trimmed })
     } else {
       if (!ownerCustomerId) {
-        setMessage('Select a Venue Owner (Customer) before creating a venue')
+        setMessage('Select a Venue owner (Customer) before creating a Venue')
         return
       }
       result = await createVenue({
@@ -109,10 +110,10 @@ export default function OrganizationsPage() {
     setName('')
     setMessage(
       tab === 'customers'
-        ? `Created customer ${result.data?.customer?.customerId}`
-        : tab === 'tenants'
-          ? `Created tenant ${result.data?.tenant?.tenantId}`
-          : `Created venue ${result.data?.venue?.venueId}`,
+        ? `Created Customer ${result.data?.customer?.customerId}`
+        : tab === 'operators'
+          ? `Created Operator ${result.data?.operator?.operatorId}`
+          : `Created Venue ${result.data?.venue?.venueId}`,
     )
     await load()
   }
@@ -123,13 +124,13 @@ export default function OrganizationsPage() {
     setEditTimezone(row.timezone || '')
     setEditBillingEmail(row.billingEmail || '')
     setEditNotes(row.notes || '')
-    setEditOwnerCustomerId(row.ownerCustomerId || row.ownerOrgId || ownerCustomerId)
+    setEditOwnerCustomerId(row.ownerCustomerId || ownerCustomerId)
   }
 
   const handleSaveEdit = async () => {
     if (!editRow) return
     setMessage('')
-    const id = editRow.customerId || editRow.tenantId || editRow.venueId
+    const id = editRow.customerId || editRow.operatorId || editRow.venueId
     let result
     if (tab === 'customers') {
       result = await patchCustomer(id, {
@@ -137,8 +138,8 @@ export default function OrganizationsPage() {
         billingEmail: editBillingEmail.trim() || null,
         notes: editNotes.trim() || null,
       })
-    } else if (tab === 'tenants') {
-      result = await patchTenant(id, {
+    } else if (tab === 'operators') {
+      result = await patchOperator(id, {
         name: editName.trim(),
         timezone: editTimezone.trim() || undefined,
       })
@@ -162,7 +163,7 @@ export default function OrganizationsPage() {
     setMessage('')
     let result
     if (tab === 'customers') result = await deactivateCustomer(id)
-    else if (tab === 'tenants') result = await deactivateTenant(id)
+    else if (tab === 'operators') result = await deactivateOperator(id)
     else result = await deactivateVenue(id)
     if (result.error) {
       setMessage(result.error)
@@ -173,18 +174,18 @@ export default function OrganizationsPage() {
   }
 
   const rows =
-    tab === 'customers' ? customers : tab === 'tenants' ? tenants : venues
+    tab === 'customers' ? customers : tab === 'operators' ? operators : venues
 
   return (
     <PageScaffold
-      title="Organizations"
-      category="Cloud"
-      description="Customers (Buyer / Venue Owner), Operator Tenants, and Venues. Provisioned treadmills bind operator tenant + venue + buyer."
+      title="Customers / Operators / Venues"
+      category="Business & Commerce"
+      description="Customer (buyer / Venue owner), Operator (estate boundary), and Venue (site). Treadmills bind Operator + Venue + Customer."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
       {message && (
-        <Alert severity="info" sx={{ mb: 2 }} data-testid="orgs-message">
+        <Alert severity="info" sx={{ mb: 2 }} data-testid="accounts-message">
           {message}
         </Alert>
       )}
@@ -196,7 +197,7 @@ export default function OrganizationsPage() {
                 key={entry.id}
                 variant={tab === entry.id ? 'contained' : 'outlined'}
                 onClick={() => setTab(entry.id)}
-                data-testid={`orgs-tab-${entry.id}`}
+                data-testid={`accounts-tab-${entry.id}`}
               >
                 {entry.label}
               </Button>
@@ -204,12 +205,18 @@ export default function OrganizationsPage() {
           </Stack>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
             <TextField
-              label={tab === 'venues' ? 'Venue name' : tab === 'tenants' ? 'Operator name' : 'Customer name'}
+              label={
+                tab === 'venues'
+                  ? 'Venue name'
+                  : tab === 'operators'
+                    ? 'Operator name'
+                    : 'Customer name'
+              }
               size="small"
               sx={{ minWidth: 240 }}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              inputProps={{ 'data-testid': 'orgs-name' }}
+              inputProps={{ 'data-testid': 'accounts-name' }}
             />
             {tab === 'venues' && (
               <TextField
@@ -219,7 +226,7 @@ export default function OrganizationsPage() {
                 sx={{ minWidth: 240 }}
                 value={ownerCustomerId}
                 onChange={(e) => setOwnerCustomerId(e.target.value)}
-                inputProps={{ 'data-testid': 'orgs-owner-customer' }}
+                inputProps={{ 'data-testid': 'accounts-owner-customer' }}
               >
                 {customers.map((customer) => (
                   <MenuItem key={customer.customerId} value={customer.customerId}>
@@ -232,7 +239,7 @@ export default function OrganizationsPage() {
               variant="contained"
               onClick={handleCreate}
               disabled={!name.trim() || (tab === 'venues' && !ownerCustomerId)}
-              data-testid="orgs-create"
+              data-testid="accounts-create"
             >
               Create
             </Button>
@@ -256,7 +263,7 @@ export default function OrganizationsPage() {
                 </TableRow>
               )}
               {rows.map((row) => {
-                const id = row.customerId || row.tenantId || row.venueId
+                const id = row.customerId || row.operatorId || row.venueId
                 return (
                   <TableRow key={id}>
                     <TableCell>{id}</TableCell>
@@ -266,11 +273,11 @@ export default function OrganizationsPage() {
                     </TableCell>
                     {tab === 'venues' && (
                       <TableCell>
-                        {row.ownerName || row.ownerCustomerId || row.ownerOrgId || '—'}
+                        {row.ownerName || row.ownerCustomerId || '—'}
                       </TableCell>
                     )}
                     <TableCell align="right">
-                      <Button size="small" onClick={() => openEdit(row)} data-testid={`orgs-edit-${id}`}>
+                      <Button size="small" onClick={() => openEdit(row)} data-testid={`accounts-edit-${id}`}>
                         Edit
                       </Button>
                       <Button
@@ -290,7 +297,9 @@ export default function OrganizationsPage() {
       )}
 
       <Dialog open={Boolean(editRow)} onClose={() => setEditRow(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Edit {tab === 'customers' ? 'Customer' : tab === 'tenants' ? 'Tenant' : 'Venue'}</DialogTitle>
+        <DialogTitle>
+          Edit {tab === 'customers' ? 'Customer' : tab === 'operators' ? 'Operator' : 'Venue'}
+        </DialogTitle>
         <DialogContent>
           <TextField
             label="Name"
@@ -317,7 +326,7 @@ export default function OrganizationsPage() {
               />
             </>
           )}
-          {(tab === 'tenants' || tab === 'venues') && (
+          {(tab === 'operators' || tab === 'venues') && (
             <TextField
               label="Timezone"
               fullWidth

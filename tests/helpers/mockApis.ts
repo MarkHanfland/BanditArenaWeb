@@ -1,5 +1,5 @@
-const demoTenant = {
-  tenantId: 'tenant-demo-001',
+const demoOperator = {
+  operatorId: 'operator-demo-001',
   name: 'Bandit Demo Operator',
   sessionLimitPerDay: 8,
   schedulingPolicy: 'commercial',
@@ -86,6 +86,8 @@ export function createCloudFixture() {
     {
       instanceId: 'i1',
       computeSerialNumber: 'BA-SN-001',
+      displayName: 'Lab Bay 1',
+      venueId: 'venue-demo-001',
       status: 'online',
       firmwareVersion: '1.0',
       updateAvailable: false,
@@ -93,6 +95,8 @@ export function createCloudFixture() {
     {
       instanceId: 'i-provisioned',
       computeSerialNumber: 'BA-SN-PROV',
+      displayName: 'Staging Bay',
+      venueId: 'venue-demo-001',
       status: 'provisioned',
       firmwareVersion: '1.0',
     },
@@ -156,6 +160,10 @@ export function createCloudFixture() {
       sessionId: 'session-demo-001',
       userId: 'user-demo-001',
       mediaId: 'm1',
+      instanceId: 'i1',
+      venueId: 'venue-demo-001',
+      venueName: 'Bandit Arena Lab',
+      instanceDisplayName: 'Lab Bay 1',
       status: 'completed',
       startTime: '2026-08-20T15:00:00.000Z',
       endTime: '2026-08-20T15:10:00.000Z',
@@ -165,6 +173,10 @@ export function createCloudFixture() {
       sessionId: 'session-demo-002',
       userId: 'user-demo-001',
       mediaId: 'm1',
+      instanceId: 'i1',
+      venueId: 'venue-demo-001',
+      venueName: 'Bandit Arena Lab',
+      instanceDisplayName: 'Lab Bay 1',
       status: 'active',
       startTime: '2026-08-26T14:00:00.000Z',
       duration: 120,
@@ -172,8 +184,8 @@ export function createCloudFixture() {
   ];
 
   return {
-    tenant: demoTenant,
-    tenants: [demoTenant],
+    operator: demoOperator,
+    operators: [demoOperator],
     customers: [demoCustomer],
     venues: [demoVenue],
     users,
@@ -214,24 +226,24 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     const json = (body: object, status = 200) =>
       route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-    if (path === '/tenants/me') {
-      return json({ tenant: fixture.tenant, message: 'Current tenant context' });
+    if (path === '/operators/me') {
+      return json({ operator: fixture.operator, message: 'Current Operator context' });
     }
-    if (path === '/tenants' && method === 'GET') {
+    if (path === '/operators' && method === 'GET') {
       return json({
-        tenants: fixture.tenants || [demoTenant],
-        message: 'Operator tenant list',
+        operators: fixture.operators || [demoOperator],
+        message: 'Operator list',
       });
     }
-    if (path === '/tenants' && method === 'POST') {
+    if (path === '/operators' && method === 'POST') {
       const body = route.request().postDataJSON() || {};
-      const tenant = {
-        tenantId: body.tenantId || `tenant-${Date.now()}`,
+      const operator = {
+        operatorId: body.operatorId || `tenant-${Date.now()}`,
         name: body.name || 'New Operator',
         status: 'active',
       };
-      fixture.tenants = [...(fixture.tenants || []), tenant];
-      return json({ tenant, message: 'Operator tenant created' }, 201);
+      fixture.operators = [...(fixture.operators || []), tenant];
+      return json({ operator, message: 'Operator created' }, 201);
     }
     if (path === '/customers' && method === 'GET') {
       return json({
@@ -296,7 +308,7 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       return json({ assignment, message: 'Venue role assigned' });
     }
     if (path === '/users' && method === 'GET') {
-      return json({ users: fixture.users, tenant: fixture.tenant, message: 'List of users' });
+      return json({ users: fixture.users, operator: fixture.operator, message: 'List of users' });
     }
     if (path === '/users' && method === 'POST') {
       const body = route.request().postDataJSON();
@@ -616,6 +628,10 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         status: 'active',
         userId: body.userId || 'user-demo-001',
         mediaId: body.mediaId || 'm1',
+        instanceId: body.instanceId || null,
+        venueId: body.venueId || null,
+        venueName: body.venueName || null,
+        instanceDisplayName: body.instanceDisplayName || null,
         startTime: new Date().toISOString(),
         duration: 0,
       };
@@ -866,7 +882,7 @@ export async function mockDeviceApi(page, options: {
   await page.route('**/auth/info', async (route) =>
     deviceJson(route, {
       auth_enabled: true,
-      tenantId: 'tenant-demo-001',
+      operatorId: 'operator-demo-001',
       deviceId: 'instance-demo-001',
       deviceBound: true,
     }),

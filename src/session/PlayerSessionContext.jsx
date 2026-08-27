@@ -10,6 +10,7 @@ import React, {
 import { endSession, getCurrentSession, startSession } from '../api/device'
 import { createSession, closeSession, listMedia, listUsers } from '../api/cloud'
 import { readLastPlayers, rememberPlayer } from './lastPlayers'
+import { resolveSessionDeviceContext } from './sessionDeviceContext'
 import { formatSessionClock, sessionPhaseFrom, SESSION_PHASE, SESSION_PHASE_LABEL } from './playerSessionPhase'
 
 const PlayerSessionContext = createContext(null)
@@ -223,16 +224,20 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     // (device cloud + identity), reuse it. Otherwise open a Cognito session record so
     // lab runs still appear under Operations → Session History.
     cloudSessionIdRef.current = null
+    let cloudOpenError = null
     if (data?.cloudLinked && data?.sessionId) {
       cloudSessionIdRef.current = data.sessionId
     } else {
+      const deviceCtx = await resolveSessionDeviceContext({ deviceId: data?.deviceId })
       const cloudOpen = await createSession({
         userId,
         mediaId,
         banditProductId: 'product-demo-treadmill',
         clientOpenKey: data?.sessionId || `console-${userId}-${Date.now()}`,
+        ...deviceCtx,
       })
       if (cloudOpen.error) {
+        cloudOpenError = cloudOpen.error
         setMessage(
           data?.cloudWarning
             || `Device session started; Session History record failed: ${cloudOpen.error}`,
@@ -255,7 +260,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     if (data?.mediaId) {
       setSelectedMediaId(data.mediaId)
     }
-    if (data?.cloudWarning && !cloudOpen.error) {
+    if (data?.cloudWarning && !cloudOpenError) {
       setMessage(data.cloudWarning)
     }
     setBusy(false)
