@@ -77,6 +77,7 @@ export function createCloudFixture() {
       name: 'Alpine Trail',
       description: 'Demo',
       cover: 'https://placehold.co/200x120',
+      image: 'https://placehold.co/200x120',
       pricePerMinute: 0.1,
       version: 1,
     },
@@ -102,7 +103,73 @@ export function createCloudFixture() {
   const tickets: Array<Record<string, unknown>> = [];
   const diagCommands: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
-  const offerings: Array<Record<string, unknown>> = [];
+  const offerings: Array<Record<string, unknown>> = [
+    {
+      skuId: 'BA-CORE-BUNDLE',
+      offeringType: 'primary_system',
+      name: 'Bandit Arena Core',
+      stream: 'hardware',
+      unitPriceUsd: 25000,
+      productId: 'bandit-arena-core',
+    },
+    {
+      skuId: 'BA-PRO-BUNDLE',
+      offeringType: 'primary_system',
+      name: 'Bandit Arena Pro',
+      stream: 'hardware',
+      unitPriceUsd: 32000,
+      productId: 'bandit-arena-pro',
+    },
+    {
+      skuId: 'BA-SPARE-MEMBRANE',
+      offeringType: 'spare',
+      name: 'Replacement tread membrane',
+      stream: 'parts',
+      unitPriceUsd: 1600,
+      componentId: 'hw-membrane',
+      compatibleProductIds: ['product-demo-treadmill', 'bandit-arena-core', 'bandit-arena-pro'],
+    },
+    {
+      skuId: 'BA-ADDON-DOME',
+      offeringType: 'addon',
+      name: 'Projection dome add-on',
+      stream: 'hardware',
+      unitPriceUsd: 8500,
+      compatibleProductIds: ['bandit-arena-pro'],
+      requiresFeatures: ['dome_capable'],
+    },
+  ];
+  const alerts: Array<Record<string, unknown>> = [
+    {
+      alertId: 'alert-001',
+      ruleId: 'rule-device-offline',
+      instanceId: 'i1',
+      metric: 'device_status',
+      severity: 'warning',
+      status: 'open',
+      message: 'Device i1 is offline',
+    },
+  ];
+  const notifications: Array<Record<string, unknown>> = [];
+  const sessions = [
+    {
+      sessionId: 'session-demo-001',
+      userId: 'user-demo-001',
+      mediaId: 'm1',
+      status: 'completed',
+      startTime: '2026-08-20T15:00:00.000Z',
+      endTime: '2026-08-20T15:10:00.000Z',
+      duration: 600,
+    },
+    {
+      sessionId: 'session-demo-002',
+      userId: 'user-demo-001',
+      mediaId: 'm1',
+      status: 'active',
+      startTime: '2026-08-26T14:00:00.000Z',
+      duration: 120,
+    },
+  ];
 
   return {
     tenant: demoTenant,
@@ -115,18 +182,30 @@ export function createCloudFixture() {
     licenses,
     reservations,
     media,
+    lastMediaPatch: null as { mediaId: string; body: Record<string, unknown> } | null,
     instances,
     maintenance,
     tickets,
     diagCommands,
     orders,
     offerings,
+    alerts,
+    notifications,
+    sessions,
   };
 }
 
 export type CloudFixture = ReturnType<typeof createCloudFixture>;
 
 export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixture()) {
+  // SW-089: browser PutObject to presigned S3 URL (not under /api).
+  await page.route('https://s3.mock.local/**', async (route) => {
+    if (route.request().method() === 'PUT') {
+      return route.fulfill({ status: 200, body: '' });
+    }
+    return route.fallback();
+  });
+
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^\/api/, '') || '/';
@@ -254,8 +333,66 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       const user = fixture.users.find((u) => u.userId === userDetail[1]) || fixture.users[0];
       return json({ user, message: 'User detail' });
     }
-    if (/^\/users\/[^/]+\/sessions$/.test(path)) {
-      return json({ sessions: [], message: 'User sessions' });
+    if (/^\/users\/([^/]+)\/sessions$/.test(path) && method === 'GET') {
+      const userId = path.split('/')[2];
+      const sessions = (fixture.sessions || []).filter((s) => s.userId === userId);
+      return json({ sessions, userId, message: 'User sessions' });
+    }
+    if (/^\/sessions\/([^/]+)\/metrics$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      return json({
+        message: 'Session metrics',
+        sessionId,
+        metrics: {
+          durationSeconds: 600,
+          distanceMeters: 1200,
+          averageSpeedMps: 2,
+          maxSpeedMps: 3.5,
+          calories: 80,
+          safetyEventCount: 1,
+          vrSceneCount: 2,
+          source: 'fixture',
+        },
+      });
+    }
+    if (/^\/sessions\/([^/]+)\/safety-events$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      return json({
+        message: 'Session safety events',
+        sessionId,
+        safetyEvents: [{ t: 120, type: 'belt_stop', severity: 'warning' }],
+      });
+    }
+    if (/^\/sessions\/([^/]+)\/export$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      const session = (fixture.sessions || []).find((s) => s.sessionId === sessionId) || {
+        sessionId,
+        userId: 'user-demo-001',
+        status: 'completed',
+      };
+      return json({
+        format: 'json',
+        contentType: 'application/json',
+        body: {
+          sessionId,
+          userId: session.userId,
+          status: session.status,
+          startTime: session.startTime,
+          endTime: session.endTime || null,
+          metrics: { durationSeconds: session.duration || 600 },
+          timeline: { speed: [], vrScenes: [], safetyEvents: [] },
+        },
+      });
+    }
+    if (/^\/sessions\/([^/]+)$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      const session = (fixture.sessions || []).find((s) => s.sessionId === sessionId) || {
+        sessionId,
+        userId: 'user-demo-001',
+        status: 'completed',
+        mediaId: 'media-demo-001',
+      };
+      return json({ message: 'Session', session });
     }
     if (path === '/analytics/summary') {
       return json({
@@ -263,8 +400,41 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         activeDevices: 1,
         enrolledUsers: fixture.users.filter((u) => u.enrollmentState === 'active').length,
         weeklySessionTrend: [1, 2, 3],
-        alerts: [],
+        alerts: fixture.alerts.filter((a) => a.status === 'open'),
       });
+    }
+    if (path === '/alert-rules' && method === 'GET') {
+      return json({
+        message: 'Alert rules',
+        rules: [
+          {
+            ruleId: 'rule-device-offline',
+            name: 'Device offline',
+            metric: 'device_status',
+            severity: 'warning',
+            enabled: true,
+          },
+        ],
+      });
+    }
+    if (path === '/alerts' && method === 'GET') {
+      const status = url.searchParams.get('status');
+      let alerts = fixture.alerts;
+      if (status) alerts = alerts.filter((a) => a.status === status);
+      return json({ message: 'Alerts', alerts });
+    }
+    {
+      const ackMatch = path.match(/^\/alerts\/([^/]+)\/ack$/);
+      if (ackMatch && method === 'POST') {
+        const alertId = ackMatch[1];
+        const alert = fixture.alerts.find((a) => a.alertId === alertId);
+        if (!alert) return json({ error: 'Alert not found' }, 404);
+        alert.status = 'acknowledged';
+        return json({ message: 'Alert acknowledged', alert: { ...alert } });
+      }
+    }
+    if (path === '/notifications' && method === 'GET') {
+      return json({ message: 'Notifications', notifications: fixture.notifications });
     }
     if (path === '/media' && method === 'GET') {
       return json({ media: fixture.media });
@@ -277,9 +447,73 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         description: body.description,
         pricePerMinute: body.pricePerMinute,
         version: 1,
+        cover: body.cover || '',
+        image: body.image || body.cover || '',
       };
       fixture.media.push(item);
       return json({ media: item, message: 'Content published' }, 201);
+    }
+    {
+      const assetUploadMatch = path.match(/^\/media\/([^/]+)\/asset-upload-token$/);
+      if (assetUploadMatch && method === 'POST') {
+        const mediaId = assetUploadMatch[1];
+        const body = route.request().postDataJSON() || {};
+        const assetType = body.assetType === 'demoVideo' ? 'demoVideo' : 'image';
+        const ext =
+          typeof body.fileName === 'string' && body.fileName.includes('.')
+            ? body.fileName.split('.').pop()
+            : assetType === 'demoVideo'
+              ? 'mp4'
+              : 'png';
+        const objectKey = `media-assets/${mediaId}/${assetType}/e2e.${ext}`;
+        const uploadUrl = `https://s3.mock.local/${objectKey}`;
+        return json({
+          message: 'Media asset upload token issued',
+          uploadToken: 'e2e-upload-token',
+          mediaId,
+          assetType,
+          objectKey,
+          uploadUrl,
+          contentType: body.contentType || 'application/octet-stream',
+          expiresInSeconds: 900,
+          issuedAt: new Date().toISOString(),
+          source: 's3',
+          publicUrl: null,
+        });
+      }
+    }
+    {
+      const mediaPatchMatch = path.match(/^\/media\/([^/]+)$/);
+      if (mediaPatchMatch && method === 'PATCH') {
+        const mediaId = mediaPatchMatch[1];
+        const body = route.request().postDataJSON() || {};
+        const item = fixture.media.find((entry) => entry.mediaId === mediaId);
+        if (!item) {
+          return json({ error: 'Media not found' }, 404);
+        }
+        // Capture last PATCH for Playwright assertions (no multi-MB data URLs).
+        fixture.lastMediaPatch = { mediaId, body };
+        if (body.imageObjectKey != null) {
+          item.imageObjectKey = body.imageObjectKey;
+          const signed = `https://signed.mock.local/${body.imageObjectKey}`;
+          item.image = signed;
+          item.cover = signed;
+        } else {
+          if (body.image != null) item.image = body.image;
+          if (body.cover != null) item.cover = body.cover;
+        }
+        if (body.demoVideoObjectKey != null) {
+          item.demoVideoObjectKey = body.demoVideoObjectKey;
+          item.demoVideo = `https://signed.mock.local/${body.demoVideoObjectKey}`;
+        } else if (body.demoVideo != null) {
+          item.demoVideo = body.demoVideo;
+        }
+        if (body.name != null) item.name = body.name;
+        if (body.description != null) item.description = body.description;
+        if (body.objectKey != null) item.objectKey = body.objectKey;
+        if (body.version != null) item.version = body.version;
+        return json({ media: { ...item }, message: 'Media updated' });
+      }
     }
     if (path === '/product-instances' && method === 'GET') {
       return json({ instances: fixture.instances });
@@ -289,23 +523,27 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       if (!body.computeSerialNumber) {
         return json({ error: 'computeSerialNumber is required (ASSY-COMPUTE unique serial)' }, 400);
       }
+      const instance = {
+        instanceId: 'instance-new',
+        model: body.model,
+        computeSerialNumber: body.computeSerialNumber,
+        status: 'provisioned',
+        firmwareVersion: '1.2.0-alpha',
+        certificateThumbprint: 'abc123',
+      };
+      fixture.instances.push(instance);
+      const oneTimeCredentials = {
+        certificatePem: '-----BEGIN BANDIT ALPHA DEVICE CERTIFICATE-----\nDEMO\n-----END BANDIT ALPHA DEVICE CERTIFICATE-----',
+        privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEMO\n-----END PRIVATE KEY-----',
+        certificateCn: 'bandit-device-instance-new',
+        certificateThumbprint: 'abc123',
+        certificateSource: 'alpha-ephemeral',
+      };
       return json(
         {
-          instance: {
-            instanceId: 'instance-new',
-            model: body.model,
-            computeSerialNumber: body.computeSerialNumber,
-            status: 'provisioned',
-            firmwareVersion: '1.2.0-alpha',
-            certificateThumbprint: 'abc123',
-          },
-          oneTimeCredentials: {
-            certificatePem: '-----BEGIN BANDIT ALPHA DEVICE CERTIFICATE-----\nDEMO\n-----END BANDIT ALPHA DEVICE CERTIFICATE-----',
-            privateKeyPem: '-----BEGIN PRIVATE KEY-----\nDEMO\n-----END PRIVATE KEY-----',
-            certificateCn: 'bandit-device-instance-new',
-            certificateThumbprint: 'abc123',
-            certificateSource: 'alpha-ephemeral',
-          },
+          instance,
+          oneTimeCredentials,
+          credentials: oneTimeCredentials,
           message: 'Device provisioned',
         },
         201,
@@ -372,10 +610,29 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       return json({ allowed, reason: allowed ? 'active_enrollment' : 'enrollment_not_active' });
     }
     if (path === '/sessions' && method === 'POST') {
-      return json({ session: { sessionId: 'session-new', status: 'active' }, message: 'Session created' }, 201);
+      const body = route.request().postDataJSON() || {};
+      const session = {
+        sessionId: 'session-new',
+        status: 'active',
+        userId: body.userId || 'user-demo-001',
+        mediaId: body.mediaId || 'm1',
+        startTime: new Date().toISOString(),
+        duration: 0,
+      };
+      fixture.sessions.unshift(session);
+      return json({ session, message: 'Session created' }, 201);
     }
-    if (path === '/notifications/send') {
-      return json({ notificationId: 'n1', status: 'sent' }, 202);
+    if (path === '/notifications/send' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const item = {
+        notificationId: `notif-${fixture.notifications.length + 1}`,
+        userId: body.userId || 'user-demo-001',
+        channel: body.channel || 'email',
+        templateId: body.template || 'session_reminder',
+        status: 'queued',
+      };
+      fixture.notifications.unshift(item);
+      return json({ notificationId: item.notificationId, status: item.status, message: 'Notification queued' }, 202);
     }
     if (path === '/support/tickets' && method === 'GET') {
       return json({ tickets: fixture.tickets || [], message: 'Support tickets' });
@@ -407,42 +664,7 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path === '/commerce/catalog' && method === 'GET') {
       return json({
-        offerings: fixture.offerings || [
-          {
-            skuId: 'BA-CORE-BUNDLE',
-            offeringType: 'primary_system',
-            name: 'Bandit Arena Core',
-            stream: 'hardware',
-            unitPriceUsd: 25000,
-            productId: 'bandit-arena-core',
-          },
-          {
-            skuId: 'BA-PRO-BUNDLE',
-            offeringType: 'primary_system',
-            name: 'Bandit Arena Pro',
-            stream: 'hardware',
-            unitPriceUsd: 32000,
-            productId: 'bandit-arena-pro',
-          },
-          {
-            skuId: 'BA-SPARE-MEMBRANE',
-            offeringType: 'spare',
-            name: 'Replacement tread membrane',
-            stream: 'parts',
-            unitPriceUsd: 1600,
-            componentId: 'hw-membrane',
-            compatibleProductIds: ['product-demo-treadmill', 'bandit-arena-core', 'bandit-arena-pro'],
-          },
-          {
-            skuId: 'BA-ADDON-DOME',
-            offeringType: 'addon',
-            name: 'Projection dome add-on',
-            stream: 'hardware',
-            unitPriceUsd: 8500,
-            compatibleProductIds: ['bandit-arena-pro'],
-            requiresFeatures: ['dome_capable'],
-          },
-        ],
+        offerings: fixture.offerings,
         message: 'Commerce offerings',
       });
     }

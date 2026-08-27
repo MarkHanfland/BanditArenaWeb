@@ -1,5 +1,5 @@
-import React from 'react'
 import { isCloudDeployment } from '../config/runtime'
+import { MENU_GROUP, MENU_LEAF_CATALOG } from '../nav/consoleMenu'
 
 export const ROLE_OPERATOR = 'operator'
 export const ROLE_TECHNICIAN = 'technician'
@@ -7,28 +7,34 @@ export const ROLE_VENUE_ADMIN = 'venue-admin'
 export const ROLE_FLEET_ADMIN = 'fleet-admin'
 export const ROLE_CLOUD_ADMIN = 'cloud-admin'
 
-const DEVICE_MENU_IDS = ['dashboard', 'user', 'treadmill', 'services', 'events', 'config']
+const leafIdsInGroups = (...groupIds) =>
+  MENU_LEAF_CATALOG.filter((leaf) => groupIds.includes(leaf.groupId)).map((leaf) => leaf.id)
 
-/** Menus for purchase / install / operate lifecycle by Cognito role. */
-const ORG_AND_FLEET = ['organizations', 'fleet', 'staff']
-const VENUE_OPS = ['media', 'users', 'reservations', 'usage', 'billing', ...ORG_AND_FLEET]
+const DEVICE_MENU_IDS = leafIdsInGroups(MENU_GROUP.LOCAL)
+
+/** Technician: local full + content/fleet/analytics estate tools (incl. disabled roadmap leaves). */
+const TECHNICIAN_CLOUD = leafIdsInGroups(
+  MENU_GROUP.DEVICE_FLEET,
+  MENU_GROUP.CONTENT,
+  MENU_GROUP.ANALYTICS,
+)
+
+/** Venue / fleet / cloud admin: all cloud pillars including Administration roadmap leaves. */
+const VENUE_CLOUD = leafIdsInGroups(
+  MENU_GROUP.OPERATIONS,
+  MENU_GROUP.DEVICE_FLEET,
+  MENU_GROUP.CONTENT,
+  MENU_GROUP.BUSINESS,
+  MENU_GROUP.ANALYTICS,
+  MENU_GROUP.ADMINISTRATION,
+)
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'user', 'treadmill', 'events'],
-  [ROLE_TECHNICIAN]: [
-    'dashboard',
-    'user',
-    'treadmill',
-    'services',
-    'events',
-    'config',
-    'media',
-    'usage',
-    'fleet',
-  ],
-  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
-  [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
-  [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_OPS],
+  [ROLE_TECHNICIAN]: [...DEVICE_MENU_IDS, ...TECHNICIAN_CLOUD],
+  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
+  [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
+  [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
 }
 
 export function extractGroupsFromUser(user) {

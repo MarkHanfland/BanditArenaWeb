@@ -33,7 +33,8 @@ import {
   updateEnrollmentState,
 } from '../../api/cloud'
 import { isCloudDeployment } from '../../config/runtime'
-import { usePlayerSession } from '../../session/PlayerSessionContext'
+import { SESSION_PHASE, usePlayerSession } from '../../session/PlayerSessionContext'
+import { requestSessionHistoryForUser } from '../../nav/sessionHistoryNav'
 
 const ENROLLMENT_ACTIONS = {
   pending: [
@@ -72,7 +73,9 @@ export default function UsersPage() {
   const [actionMessage, setActionMessage] = useState('')
   const [busyUserId, setBusyUserId] = useState('')
   const onDevice = !isCloudDeployment()
-  const { startForPlayer } = usePlayerSession()
+  const { startForPlayer, selectedMediaId, sessionActive, phase } = usePlayerSession()
+  const startBlockedByActiveSession =
+    sessionActive || phase === SESSION_PHASE.pending || phase === SESSION_PHASE.active
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -152,22 +155,35 @@ export default function UsersPage() {
 
   const handleStartSession = async (userId) => {
     setActionMessage('')
+    if (startBlockedByActiveSession) {
+      setActionMessage('Start Session is disabled while a Player session is already active.')
+      return
+    }
     const user = users.find((entry) => entry.userId === userId)
     if (user && user.enrollmentState !== 'active') {
       setActionMessage('Session blocked: enrollment not active')
       return
     }
     if (onDevice) {
+      if (!selectedMediaId) {
+        setActionMessage('Select a media title in the header before starting a device session.')
+        return
+      }
       const started = await startForPlayer({
         userId,
         displayName: user?.name || userId,
         ageAttested: Boolean(user?.ageAttested),
+        mediaId: selectedMediaId,
       })
       if (!started) {
-        setActionMessage('Device session start failed. Use the header player Start after selecting an enrolled player.')
+        setActionMessage('Device session start failed. Use the header Player Start after selecting an enrolled Player.')
         return
       }
       setActionMessage(`Device session started for ${user?.name || userId}`)
+      return
+    }
+    if (!selectedMediaId) {
+      setActionMessage('Select a media title before creating a cloud session record.')
       return
     }
     const entitlement = await checkEntitlement({ userId, action: 'session_start' })
@@ -175,7 +191,11 @@ export default function UsersPage() {
       setActionMessage(entitlement.error || 'Session blocked: enrollment not active')
       return
     }
-    const sessionRes = await createSession({ userId, banditProductId: 'product-demo-treadmill' })
+    const sessionRes = await createSession({
+      userId,
+      mediaId: selectedMediaId,
+      banditProductId: 'product-demo-treadmill',
+    })
     if (sessionRes.error) {
       setActionMessage(sessionRes.error)
       return
@@ -189,11 +209,11 @@ export default function UsersPage() {
 
   return (
     <PageScaffold
-      title="User Profile & Enrollment"
-      category="Cloud"
+      title="Enrollment / Check-In"
+      category="Operations"
       description={onDevice
-        ? "Enroll players here. Start a run from the header: pick a player and Start. Age 8+ is attested when the account is created."
-        : "Enrollment state, safety profiles, and cloud session records. Creating a cloud session does not start the treadmill."}
+        ? 'Enroll Player accounts here. Start a run from the header: pick a Player and Start. Age 8+ is attested when the account is created.'
+        : 'Enrollment state and safety profiles for Player accounts. Creating a cloud session record does not start the treadmill.'}
     >
       {tenant && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -236,6 +256,13 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell align="right">
                     <Button size="small" onClick={() => openUserDetail(user.userId)}>Details</Button>
+                    <Button
+                      size="small"
+                      onClick={() => requestSessionHistoryForUser(user.userId)}
+                      data-testid={`session-history-${user.userId}`}
+                    >
+                      Session history
+                    </Button>
                     {(ENROLLMENT_ACTIONS[user.enrollmentState] || []).map((action) => (
                       <Button
                         key={action.next}
@@ -250,6 +277,7 @@ export default function UsersPage() {
                     ))}
                     <Button
                       size="small"
+                      disabled={startBlockedByActiveSession || user.enrollmentState !== 'active'}
                       onClick={() => handleStartSession(user.userId)}
                       data-testid={`start-session-${user.userId}`}
                     >
@@ -271,13 +299,24 @@ export default function UsersPage() {
             <Typography variant="body2">
               Safety: {selectedUser?.safetyProfile?.heightCm} cm, {selectedUser?.safetyProfile?.weightKg} kg
             </Typography>
-            <Typography variant="subtitle2" sx={{ pt: 1 }}>Sessions ({sessions.length})</Typography>
+            <Typography variant="subtitle2" sx={{ pt: 1 }}>Session history ({sessions.length})</Typography>
             {sessions.map((s) => (
               <Typography key={s.sessionId} variant="body2" color="text.secondary">
                 {s.sessionId} · {s.status} · {s.duration || 0}s
               </Typography>
             ))}
-          </Stack>
+            <Button
+              size="small"
+              sx={{ alignSelf: 'flex-start' }}
+              onClick={() => {
+                const userId = selectedUser?.userId
+                setSelectedUser(null)
+                requestSessionHistoryForUser(userId)
+              }}
+              data-testid="user-detail-open-session-history"
+            >
+              Open Session History
+            </Button>          </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSelectedUser(null)}>Close</Button>

@@ -31,7 +31,6 @@ import {
   rollupFleetFinancials,
 } from '../../data/fleetDemoCatalog'
 import {
-  activateDevice,
   checkUpdates,
   listCustomers,
   listProductInstances,
@@ -195,8 +194,13 @@ export default function FleetPage({ initialTab = 'overview' }) {
     }
     setRegisterOpen(false)
     setComputeSerialNumber('')
-    setCredentials(data?.credentials || null)
-    showMessage(`Provisioned ${data?.instance?.instanceId || 'device'}`, 'success')
+    setCredentials(data?.credentials || data?.oneTimeCredentials || null)
+    const serial = data?.instance?.computeSerialNumber
+    const provisionedId = data?.instance?.instanceId || 'device'
+    showMessage(
+      serial ? `Provisioned ${provisionedId} (SN ${serial})` : `Provisioned ${provisionedId}`,
+      'success',
+    )
     await loadFleet()
   }
 
@@ -448,26 +452,6 @@ export default function FleetPage({ initialTab = 'overview' }) {
             </Box>
           </Stack>
 
-          {apiInstances.some((i) => i.status === 'provisioned') && (
-            <Box sx={{ display: 'none' }} aria-hidden>
-              {apiInstances
-                .filter((i) => i.status === 'provisioned')
-                .map((i) => (
-                  <Button
-                    key={i.instanceId}
-                    data-testid={`activate-${i.instanceId}`}
-                    onClick={async () => {
-                      const { error: actErr } = await activateDevice(i.instanceId, {})
-                      showMessage(
-                        actErr || `Activated ${i.instanceId}`,
-                        actErr ? 'error' : 'success',
-                      )
-                      await loadFleet()
-                    }}
-                  />
-                ))}
-            </Box>
-          )}
         </Stack>
 
         <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="xs" fullWidth>

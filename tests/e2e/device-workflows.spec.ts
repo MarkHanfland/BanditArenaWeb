@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { signInAsVenueAdmin } from '../helpers/auth';
 import { mockConsoleApis, createCloudFixture } from '../helpers/mockApis';
 import { selectEnrolledPlayer } from '../helpers/selectPlayer';
+import { openMenuItem } from '../helpers/menuNav';
 
 test('device dashboard, user, treadmill, events, services, and config pages load', async ({ page }) => {
   await mockConsoleApis(page);
@@ -13,7 +14,7 @@ test('device dashboard, user, treadmill, events, services, and config pages load
   await expect(page.getByTestId('device-status-bar')).toBeVisible();
   await expect(page.getByTestId('header-player-select')).toBeVisible();
   await expect(page.getByTestId('header-session-start')).toBeVisible();
-  await expect(page.getByTestId('dashboard-treadmill-state')).toHaveText('User Standby');
+  await expect(page.getByTestId('dashboard-treadmill-state')).toHaveText('Offline');
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
   await expect(page.getByText('OPENXR DRIVER')).toBeVisible();
   await expect(page.getByText('OPENXR RUNTIME')).toHaveCount(0);
@@ -30,7 +31,7 @@ test('device dashboard, user, treadmill, events, services, and config pages load
 
   await page.getByTestId('menu-treadmill').click();
   await expect(page.getByText('Treadmill Status')).toBeVisible();
-  await expect(page.getByTestId('treadmill-status')).toHaveText('User Standby');
+  await expect(page.getByTestId('treadmill-status')).toHaveText('Standby');
 
   await page.getByTestId('menu-events').click();
   await expect(page.getByText('Safety & Error Events')).toBeVisible();
@@ -50,14 +51,14 @@ test('header session start and end for an enrolled player', async ({ page }) => 
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
   await selectEnrolledPlayer(page, /Alex Runner/, { userId: 'user-demo-001' });
 
-  await page.getByTestId('menu-media').click();
+  await openMenuItem(page, 'content', 'menu-media');
   await expect(page.getByRole('heading', { name: 'Media' })).toBeVisible();
 
   await page.getByTestId('header-session-start').click();
   await expect(page.getByTestId('menu-dashboard')).toHaveClass(/Mui-selected/);
   await expect(page.getByTestId('dashboard-treadmill-state')).toBeVisible();
   await expect(page.getByTestId('dashboard-vr-position')).toBeVisible();
-  await expect(page.getByTestId('header-session-player')).toHaveText('Alex Runner');
+  await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
   await expect(page.getByTestId('dashboard-session-time')).toHaveText(/\d+:\d{2}/);
   await expect(page.getByTestId('menu-user')).toBeEnabled();
 

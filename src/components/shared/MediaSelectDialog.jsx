@@ -14,6 +14,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import { MEDIA_BANNER_SX } from './mediaBannerSx'
 
 function matchesMediaSearch(item, search) {
   const q = String(search || '').trim().toLowerCase()
@@ -149,7 +150,7 @@ export default function MediaSelectDialog({
                       component="img"
                       src={highlighted.image || highlighted.cover}
                       alt=""
-                      sx={{ width: '100%', maxHeight: 140, objectFit: 'cover', borderRadius: 1 }}
+                      sx={MEDIA_BANNER_SX}
                     />
                   ) : null}
                   <Typography variant="subtitle1">{highlighted.name}</Typography>

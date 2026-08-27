@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
+import { MEDIA_BANNER_SX } from '../../components/shared/mediaBannerSx'
 import {
   createMediaAssetUploadToken,
   createContentUploadToken,
@@ -405,10 +406,10 @@ export default function MediaPage() {
                         component="img"
                         image={image}
                         alt={item.name}
-                        sx={{ aspectRatio: '3 / 2', width: '100%', objectFit: 'cover' }}
+                        sx={{ ...MEDIA_BANNER_SX, borderRadius: 0 }}
                       />
                     ) : (
-                      <Box sx={{ aspectRatio: '3 / 2', width: '100%', bgcolor: 'background.default' }} />
+                      <Box sx={{ ...MEDIA_BANNER_SX, borderRadius: 0 }} />
                     )}
                     <CardContent sx={{ flex: 1 }}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }} flexWrap="wrap" useFlexGap>
@@ -522,13 +523,7 @@ export default function MediaPage() {
                 component="img"
                 src={draft.image}
                 alt="Preview"
-                sx={{
-                  aspectRatio: '3 / 2',
-                  width: '100%',
-                  objectFit: 'cover',
-                  borderRadius: 1,
-                  bgcolor: 'background.default',
-                }}
+                sx={MEDIA_BANNER_SX}
               />
             ) : null}
             <Stack direction="row" spacing={1} alignItems="center">
@@ -537,6 +532,7 @@ export default function MediaPage() {
                 size="small"
                 disabled={Boolean(uploading)}
                 onClick={() => imageInputRef.current?.click()}
+                data-testid="upload-media-image"
               >
                 {uploading === 'image' ? 'Uploading…' : 'Upload image'}
               </Button>
@@ -545,6 +541,7 @@ export default function MediaPage() {
                 type="file"
                 accept="image/*"
                 hidden
+                data-testid="upload-media-image-input"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ''
