@@ -76,6 +76,7 @@ const roleCases: RoleCase[] = [
       'menu-usage',
       'menu-fleet',
       'menu-billing',
+      'menu-sessions',
       'menu-group-operations',
       'menu-group-device-fleet',
       'menu-group-content',
@@ -84,7 +85,6 @@ const roleCases: RoleCase[] = [
       'menu-group-administration',
     ],
     expectedDisabled: [
-      'menu-sessions',
       'menu-notifications',
       'menu-firmware',
       'menu-diagnostics',

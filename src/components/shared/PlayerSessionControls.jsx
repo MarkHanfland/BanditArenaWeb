@@ -156,12 +156,12 @@ export default function PlayerSessionControls({
         {showPlayer && (
           <TextField
             size="small"
-            label={compact ? 'Player' : 'Enrolled player'}
+            label={compact ? 'Player' : 'Enrolled Player'}
             value={playerValue}
-            placeholder={options.length ? 'Select player…' : 'No active players'}
+            placeholder={options.length ? 'Select Player…' : 'No active Players'}
             helperText={
               !compact && !sessionActive && options.length === 0
-                ? 'Seed demo users or activate under Users'
+                ? 'Seed demo accounts or activate under Enrollment / Check-In'
                 : undefined
             }
             onClick={() => {

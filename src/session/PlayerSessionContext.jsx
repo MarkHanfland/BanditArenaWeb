@@ -81,15 +81,18 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
   }, [])
 
   useEffect(() => {
+    loadPlayers()
+    loadMedia()
+  }, [loadPlayers, loadMedia])
+
+  useEffect(() => {
     if (!deviceOnline) {
       return undefined
     }
     refreshSession()
-    loadPlayers()
-    loadMedia()
     const interval = setInterval(refreshSession, 2000)
     return () => clearInterval(interval)
-  }, [deviceOnline, refreshSession, loadPlayers, loadMedia])
+  }, [deviceOnline, refreshSession])
 
   useEffect(() => {
     if (session?.active && session.userId) {

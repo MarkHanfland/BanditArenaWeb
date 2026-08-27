@@ -67,6 +67,7 @@ import OrganizationsPage from './pages/cloud/OrganizationsPage'
 import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
 import ReservationsPage from './pages/cloud/ReservationsPage'
+import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 
 import { useAuth } from './auth/useAuth'
 import { filterMenuGroups } from './auth/rolePermissions'
@@ -113,6 +114,7 @@ const IMPLEMENTED_PANELS = {
   billing: () => <BillingPage />,
   usage: () => <UsagePage />,
   fleet: () => <FleetPage />,
+  sessions: () => <SessionHistoryPage />,
 }
 
 const MENU_ICONS = {
@@ -255,6 +257,14 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     },
     [allItems, expandGroup, setActiveTab, visibleMenuGroups],
   )
+
+  useEffect(() => {
+    const onOpenHistory = () => {
+      selectMenuItem('sessions')
+    }
+    window.addEventListener('bandit:open-session-history', onOpenHistory)
+    return () => window.removeEventListener('bandit:open-session-history', onOpenHistory)
+  }, [selectMenuItem])
 
   // Sync default expand when local reachability flips (FR-SW-UI-009).
   useEffect(() => {

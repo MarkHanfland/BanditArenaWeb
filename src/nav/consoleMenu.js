@@ -30,7 +30,7 @@ export const MENU_LEAF_CATALOG = [
   { id: 'reservations', groupId: MENU_GROUP.OPERATIONS, label: 'Reservations', implemented: true },
   { id: 'users', groupId: MENU_GROUP.OPERATIONS, label: 'Enrollment / Check-In', implemented: true },
   { id: 'staff', groupId: MENU_GROUP.OPERATIONS, label: 'Staff Management', implemented: true },
-  { id: 'sessions', groupId: MENU_GROUP.OPERATIONS, label: 'Session Records', implemented: false, phase: 'Beta 1' },
+  { id: 'sessions', groupId: MENU_GROUP.OPERATIONS, label: 'Session History', implemented: true },
   { id: 'notifications', groupId: MENU_GROUP.OPERATIONS, label: 'Notifications', implemented: false, phase: 'Beta 1' },
   // Device & Fleet
   { id: 'fleet', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Treadmills / Devices', implemented: true },

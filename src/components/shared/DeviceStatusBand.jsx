@@ -5,7 +5,7 @@ import {
   getTelemetryCurrent,
   getTelemetryStats,
 } from '../../api/device'
-import { treadmillStateInfo } from '../../device/treadmillState'
+import { treadmillStatusForSession } from '../../device/treadmillState'
 import { SESSION_PHASE, usePlayerSession } from '../../session/PlayerSessionContext'
 import PlayerSessionControls from './PlayerSessionControls'
 
@@ -201,7 +201,8 @@ export default function DeviceStatusBand({ deviceOnline = true }) {
 
   const sessionTimeActive = phase === SESSION_PHASE.active
   const formattedSessionTime = sessionTimeActive ? formattedElapsed : '—'
-  const treadmillInfo = treadmillStateInfo(operatingState)
+  const sessionActive = phase === SESSION_PHASE.active || phase === SESSION_PHASE.pending
+  const treadmillInfo = treadmillStatusForSession(operatingState, { sessionActive })
 
   if (!deviceOnline) {
     return null

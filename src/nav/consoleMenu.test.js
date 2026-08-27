@@ -18,6 +18,14 @@ test('pillars include Alpha and roadmap leaves', () => {
   const admin = MENU_PILLARS.find((p) => p.id === MENU_GROUP.ADMINISTRATION)
   assert.ok(ops.itemIds.includes('reservations'))
   assert.ok(ops.itemIds.includes('sessions'))
+  assert.equal(
+    MENU_LEAF_CATALOG.find((l) => l.id === 'sessions')?.implemented,
+    true,
+  )
+  assert.equal(
+    MENU_LEAF_CATALOG.find((l) => l.id === 'sessions')?.label,
+    'Session History',
+  )
   assert.ok(fleet.itemIds.includes('fleet'))
   assert.ok(fleet.itemIds.includes('diagnostics'))
   assert.deepEqual(admin.itemIds, ['roles', 'integrations', 'branding', 'audit'])
@@ -61,8 +69,10 @@ test('firstCloudLanding skips unimplemented leaves', () => {
 
 test('FUTURE_MENU_LEAVES and implemented flags match catalog', () => {
   assert.equal(isMenuItemImplemented('fleet'), true)
-  assert.equal(isMenuItemImplemented('sessions'), false)
-  assert.ok(FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS].some((l) => l.id === 'sessions'))
+  assert.equal(isMenuItemImplemented('sessions'), true)
+  assert.equal(isMenuItemImplemented('notifications'), false)
+  assert.ok(FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS].some((l) => l.id === 'notifications'))
+  assert.ok(!FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS]?.some((l) => l.id === 'sessions'))
   assert.ok(FUTURE_MENU_LEAVES[MENU_GROUP.ADMINISTRATION].some((l) => l.id === 'audit'))
   assert.equal(
     MENU_LEAF_CATALOG.filter((l) => !l.implemented).length,

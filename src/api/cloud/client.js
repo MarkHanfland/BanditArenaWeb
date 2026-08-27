@@ -328,12 +328,28 @@ export async function getProductComponents(productId) {
 
 
 export async function createSession(payload) {
-
   return request(() => cloudApi.post('/sessions', payload))
-
 }
 
+export async function getSession(sessionId) {
+  return request(() => cloudApi.get(`/sessions/${sessionId}`))
+}
 
+export async function getSessionMetrics(sessionId) {
+  return request(() => cloudApi.get(`/sessions/${sessionId}/metrics`))
+}
+
+export async function getSessionSafetyEvents(sessionId) {
+  return request(() => cloudApi.get(`/sessions/${sessionId}/safety-events`))
+}
+
+export async function getSessionTimeline(sessionId) {
+  return request(() => cloudApi.get(`/sessions/${sessionId}/timeline`))
+}
+
+export async function exportSession(sessionId, format = 'json') {
+  return request(() => cloudApi.get(`/sessions/${sessionId}/export`, { params: { format } }))
+}
 
 export async function checkUpdates(params) {
 

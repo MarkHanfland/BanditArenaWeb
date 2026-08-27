@@ -189,7 +189,7 @@ export default function PlayerSelectDialog({
 
           {loadError && (
             <Typography variant="caption" color="warning.main">
-              Could not load reservations ({loadError}). Showing all active players.
+              Could not load reservations ({loadError}). Showing all active Players.
             </Typography>
           )}
           {loadingReservations && (
@@ -217,8 +217,8 @@ export default function PlayerSelectDialog({
                 <Box sx={{ p: 2 }}>
                   <Typography variant="body2" color="text.secondary">
                     {scheduledOnly
-                      ? 'No players scheduled for the current window. Turn off “Scheduled now” to browse all active enrollments.'
-                      : 'No players match this search.'}
+                      ? 'No Players scheduled for the current window. Turn off “Scheduled now” to browse all active enrollments.'
+                      : 'No Players match this search.'}
                   </Typography>
                   {scheduledOnly && (
                     <Button
@@ -227,7 +227,7 @@ export default function PlayerSelectDialog({
                       onClick={() => setScheduledOnly(false)}
                       data-testid={`${testIdPrefix}-show-all`}
                     >
-                      Show all active players
+                      Show all active Players
                     </Button>
                   )}
                 </Box>

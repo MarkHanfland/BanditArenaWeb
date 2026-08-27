@@ -14,7 +14,8 @@ test('cloud console Start Session creates a record and does not claim the belt s
   await page.getByTestId('login-submit').click();
 
   await openMenuItem(page, 'operations', 'menu-users');
-  await expect(page.getByText(/Creating a cloud session does not start the treadmill/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Enrollment / Check-In' })).toBeVisible();
+  await expect(page.getByText(/Creating a cloud session record does not start the treadmill/)).toBeVisible();
   await page.getByTestId('start-session-user-demo-001').click();
   await expect(page.getByTestId('enrollment-message')).toContainText(
     'Cloud session record session-new created. This does not start the treadmill.',

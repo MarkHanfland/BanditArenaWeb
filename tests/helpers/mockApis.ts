@@ -151,6 +151,25 @@ export function createCloudFixture() {
     },
   ];
   const notifications: Array<Record<string, unknown>> = [];
+  const sessions = [
+    {
+      sessionId: 'session-demo-001',
+      userId: 'user-demo-001',
+      mediaId: 'm1',
+      status: 'completed',
+      startTime: '2026-08-20T15:00:00.000Z',
+      endTime: '2026-08-20T15:10:00.000Z',
+      duration: 600,
+    },
+    {
+      sessionId: 'session-demo-002',
+      userId: 'user-demo-001',
+      mediaId: 'm1',
+      status: 'active',
+      startTime: '2026-08-26T14:00:00.000Z',
+      duration: 120,
+    },
+  ];
 
   return {
     tenant: demoTenant,
@@ -172,6 +191,7 @@ export function createCloudFixture() {
     offerings,
     alerts,
     notifications,
+    sessions,
   };
 }
 
@@ -313,8 +333,66 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       const user = fixture.users.find((u) => u.userId === userDetail[1]) || fixture.users[0];
       return json({ user, message: 'User detail' });
     }
-    if (/^\/users\/[^/]+\/sessions$/.test(path)) {
-      return json({ sessions: [], message: 'User sessions' });
+    if (/^\/users\/([^/]+)\/sessions$/.test(path) && method === 'GET') {
+      const userId = path.split('/')[2];
+      const sessions = (fixture.sessions || []).filter((s) => s.userId === userId);
+      return json({ sessions, userId, message: 'User sessions' });
+    }
+    if (/^\/sessions\/([^/]+)\/metrics$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      return json({
+        message: 'Session metrics',
+        sessionId,
+        metrics: {
+          durationSeconds: 600,
+          distanceMeters: 1200,
+          averageSpeedMps: 2,
+          maxSpeedMps: 3.5,
+          calories: 80,
+          safetyEventCount: 1,
+          vrSceneCount: 2,
+          source: 'fixture',
+        },
+      });
+    }
+    if (/^\/sessions\/([^/]+)\/safety-events$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      return json({
+        message: 'Session safety events',
+        sessionId,
+        safetyEvents: [{ t: 120, type: 'belt_stop', severity: 'warning' }],
+      });
+    }
+    if (/^\/sessions\/([^/]+)\/export$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      const session = (fixture.sessions || []).find((s) => s.sessionId === sessionId) || {
+        sessionId,
+        userId: 'user-demo-001',
+        status: 'completed',
+      };
+      return json({
+        format: 'json',
+        contentType: 'application/json',
+        body: {
+          sessionId,
+          userId: session.userId,
+          status: session.status,
+          startTime: session.startTime,
+          endTime: session.endTime || null,
+          metrics: { durationSeconds: session.duration || 600 },
+          timeline: { speed: [], vrScenes: [], safetyEvents: [] },
+        },
+      });
+    }
+    if (/^\/sessions\/([^/]+)$/.test(path) && method === 'GET') {
+      const sessionId = path.split('/')[2];
+      const session = (fixture.sessions || []).find((s) => s.sessionId === sessionId) || {
+        sessionId,
+        userId: 'user-demo-001',
+        status: 'completed',
+        mediaId: 'media-demo-001',
+      };
+      return json({ message: 'Session', session });
     }
     if (path === '/analytics/summary') {
       return json({
@@ -532,7 +610,17 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       return json({ allowed, reason: allowed ? 'active_enrollment' : 'enrollment_not_active' });
     }
     if (path === '/sessions' && method === 'POST') {
-      return json({ session: { sessionId: 'session-new', status: 'active' }, message: 'Session created' }, 201);
+      const body = route.request().postDataJSON() || {};
+      const session = {
+        sessionId: 'session-new',
+        status: 'active',
+        userId: body.userId || 'user-demo-001',
+        mediaId: body.mediaId || 'm1',
+        startTime: new Date().toISOString(),
+        duration: 0,
+      };
+      fixture.sessions.unshift(session);
+      return json({ session, message: 'Session created' }, 201);
     }
     if (path === '/notifications/send' && method === 'POST') {
       const body = route.request().postDataJSON() || {};

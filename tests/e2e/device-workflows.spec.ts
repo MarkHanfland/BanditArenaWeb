@@ -14,7 +14,7 @@ test('device dashboard, user, treadmill, events, services, and config pages load
   await expect(page.getByTestId('device-status-bar')).toBeVisible();
   await expect(page.getByTestId('header-player-select')).toBeVisible();
   await expect(page.getByTestId('header-session-start')).toBeVisible();
-  await expect(page.getByTestId('dashboard-treadmill-state')).toHaveText('User Standby');
+  await expect(page.getByTestId('dashboard-treadmill-state')).toHaveText('Offline');
   await expect(page.getByTestId('dashboard-session-time')).toHaveText('—');
   await expect(page.getByText('OPENXR DRIVER')).toBeVisible();
   await expect(page.getByText('OPENXR RUNTIME')).toHaveCount(0);
@@ -31,7 +31,7 @@ test('device dashboard, user, treadmill, events, services, and config pages load
 
   await page.getByTestId('menu-treadmill').click();
   await expect(page.getByText('Treadmill Status')).toBeVisible();
-  await expect(page.getByTestId('treadmill-status')).toHaveText('User Standby');
+  await expect(page.getByTestId('treadmill-status')).toHaveText('Standby');
 
   await page.getByTestId('menu-events').click();
   await expect(page.getByText('Safety & Error Events')).toBeVisible();

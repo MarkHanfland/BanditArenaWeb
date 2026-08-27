@@ -9,6 +9,7 @@ import {
   Stack,
   Typography,
 } from '@mui/material'
+import { MEDIA_BANNER_SX } from './mediaBannerSx'
 
 function DetailRow({ label, children }) {
   return (
@@ -44,13 +45,7 @@ export default function MediaDetailsDialog({ open, onClose, media }) {
                 component="img"
                 src={image}
                 alt={media.name || 'Media cover'}
-                sx={{
-                  width: '100%',
-                  maxHeight: 200,
-                  objectFit: 'cover',
-                  borderRadius: 1,
-                  bgcolor: 'background.default',
-                }}
+                sx={MEDIA_BANNER_SX}
               />
             ) : null}
             <DetailRow label="DESCRIPTION">

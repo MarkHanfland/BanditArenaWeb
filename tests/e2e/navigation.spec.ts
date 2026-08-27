@@ -33,7 +33,7 @@ test('offline local device collapses Local Device and shows header indicator onl
   await expect(page.getByText(/blocked by browser CORS/i)).toHaveCount(0);
 
   await openMenuItem(page, 'operations', 'menu-users');
-  await expect(page.getByRole('heading', { name: 'User Profile & Enrollment' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Enrollment / Check-In' })).toBeVisible();
 });
 
 test('venue admin can open cloud pillar pages from the sidebar', async ({ page }) => {
@@ -43,7 +43,7 @@ test('venue admin can open cloud pillar pages from the sidebar', async ({ page }
   await expect(page.getByTestId('menu-group-toggle-operations')).toHaveAttribute('aria-expanded', 'false');
 
   await openMenuItem(page, 'operations', 'menu-users');
-  await expect(page.getByRole('heading', { name: 'User Profile & Enrollment' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Enrollment / Check-In' })).toBeVisible();
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
@@ -69,8 +69,8 @@ test('menu pillars are collapsible; only Local Device starts expanded', async ({
   await expect(page.getByTestId('menu-users')).toBeVisible();
   await expect(page.getByTestId('menu-billing')).toBeVisible();
   await expect(page.getByTestId('menu-sessions')).toBeVisible();
-  await expect(page.getByTestId('menu-sessions')).toBeDisabled();
-  await expect(page.getByTestId('menu-sessions')).toHaveAttribute('data-implemented', 'false');
+  await expect(page.getByTestId('menu-sessions')).toBeEnabled();
+  await expect(page.getByTestId('menu-sessions')).toHaveAttribute('data-implemented', 'true');
   await expect(page.getByTestId('menu-group-administration')).toBeVisible();
   await expect(page.getByTestId('menu-audit')).toBeDisabled();
 });
