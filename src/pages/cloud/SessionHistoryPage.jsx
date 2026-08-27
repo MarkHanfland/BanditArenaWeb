@@ -45,6 +45,57 @@ function formatWhen(iso) {
   return new Date(ms).toLocaleString()
 }
 
+function formatDuration(seconds) {
+  const n = Number(seconds)
+  if (!Number.isFinite(n) || n < 0) return '—'
+  if (n < 60) return `${Math.round(n)}s`
+  const mins = Math.floor(n / 60)
+  const secs = Math.round(n % 60)
+  if (mins < 60) return `${mins}m ${secs}s`
+  const hours = Math.floor(mins / 60)
+  return `${hours}h ${mins % 60}m`
+}
+
+function resolveMediaId(row) {
+  if (row?.mediaId) return row.mediaId
+  if (Array.isArray(row?.mediaSessions) && row.mediaSessions[0]?.mediaId) {
+    return row.mediaSessions[0].mediaId
+  }
+  if (Array.isArray(row?.timeline?.vrScenes) && row.timeline.vrScenes[0]?.mediaId) {
+    return row.timeline.vrScenes[0].mediaId
+  }
+  return null
+}
+
+function resolveDurationSeconds(row) {
+  const stored = Number(row?.duration)
+  if (row?.status === 'active') {
+    const startMs = Date.parse(row.startTime || '')
+    if (Number.isFinite(startMs)) {
+      return Math.max(0, Math.round((Date.now() - startMs) / 1000))
+    }
+  }
+  if (Number.isFinite(stored) && stored > 0) return stored
+  if (row?.endTime && row?.startTime) {
+    const startMs = Date.parse(row.startTime)
+    const endMs = Date.parse(row.endTime)
+    if (Number.isFinite(startMs) && Number.isFinite(endMs)) {
+      return Math.max(0, Math.round((endMs - startMs) / 1000))
+    }
+  }
+  if (Number.isFinite(stored)) return stored
+  return null
+}
+
+/** Level 5 / CI polluters — not product Player accounts. */
+function isHistoryEligiblePlayer(user) {
+  if (!user) return false
+  const email = String(user.email || '').toLowerCase()
+  if (email === 'integration@example.com') return false
+  if (String(user.name || '') === 'Integration Test User') return false
+  return true
+}
+
 export default function SessionHistoryPage({ initialUserId = null } = {}) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -78,7 +129,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
       setLoading(false)
       return
     }
-    const list = usersRes.data?.users || []
+    const list = (usersRes.data?.users || []).filter(isHistoryEligiblePlayer)
     setUsers(list)
     const targets = filterUserId
       ? list.filter((u) => u.userId === filterUserId)
@@ -91,6 +142,8 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
           ...session,
           userId: session.userId || user.userId,
           playerName: user.name || user.userId,
+          mediaId: resolveMediaId(session),
+          durationDisplay: resolveDurationSeconds(session),
         }))
       }),
     )
@@ -238,7 +291,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
                     <Chip size="small" label={row.status || '—'} color={statusColor(row.status)} />
                   </TableCell>
                   <TableCell>{formatWhen(row.startTime)}</TableCell>
-                  <TableCell>{row.duration != null ? `${row.duration}s` : '—'}</TableCell>
+                  <TableCell>{formatDuration(row.durationDisplay)}</TableCell>
                   <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
                     {row.mediaId || '—'}
                   </TableCell>
@@ -277,7 +330,10 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
               </Typography>
               <Typography variant="body2">Status: {selected?.status || '—'}</Typography>
               <Typography variant="body2">Started: {formatWhen(selected?.startTime)}</Typography>
-              <Typography variant="body2">Media: {selected?.mediaId || '—'}</Typography>
+              <Typography variant="body2">
+                Duration: {formatDuration(resolveDurationSeconds(selected))}
+              </Typography>
+              <Typography variant="body2">Media: {resolveMediaId(selected) || '—'}</Typography>
               {metrics ? (
                 <Box>
                   <Typography variant="subtitle2" sx={{ mb: 0.5 }}>Metrics</Typography>
