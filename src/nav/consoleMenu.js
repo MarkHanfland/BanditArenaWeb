@@ -44,7 +44,7 @@ export const MENU_LEAF_CATALOG = [
   { id: 'session-recordings', groupId: MENU_GROUP.CONTENT, label: 'Session Recordings', implemented: false, phase: 'Beta 1' },
   // Business & Commerce
   { id: 'billing', groupId: MENU_GROUP.BUSINESS, label: 'Payments & Billing', implemented: true },
-  { id: 'organizations', groupId: MENU_GROUP.BUSINESS, label: 'Organizations / Locations', implemented: true },
+  { id: 'accounts', groupId: MENU_GROUP.BUSINESS, label: 'Customers / Operators / Venues', implemented: true },
   { id: 'subscriptions', groupId: MENU_GROUP.BUSINESS, label: 'Subscriptions', implemented: false, phase: 'Beta 1' },
   { id: 'pricing', groupId: MENU_GROUP.BUSINESS, label: 'Pricing Rules', implemented: false, phase: 'Beta 1' },
   // Analytics & Reporting

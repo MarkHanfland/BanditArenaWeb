@@ -144,6 +144,7 @@ const PARK_VENUES = [
 const NEON_DEVICES = [
   {
     instanceId: 'ba-chi-01',
+    displayName: 'River North · Bay 1',
     venueId: 'venue-chi-rivernorth',
     computeSerialNumber: 'BA-CHI-RN-01',
     status: 'online',
@@ -163,6 +164,7 @@ const NEON_DEVICES = [
   },
   {
     instanceId: 'ba-chi-02',
+    displayName: 'River North · Bay 2',
     venueId: 'venue-chi-rivernorth',
     computeSerialNumber: 'BA-CHI-RN-02',
     status: 'online',
@@ -182,6 +184,7 @@ const NEON_DEVICES = [
   },
   {
     instanceId: 'ba-nash-01',
+    displayName: 'Broadway · Unit A',
     venueId: 'venue-nash-broadway',
     computeSerialNumber: 'BA-NSH-BW-01',
     status: 'online',
@@ -201,6 +204,7 @@ const NEON_DEVICES = [
   },
   {
     instanceId: 'ba-aus-01',
+    displayName: 'Rainey · Studio 1',
     venueId: 'venue-aus-rainey',
     computeSerialNumber: 'BA-AUS-RS-01',
     status: 'online',
@@ -377,10 +381,14 @@ const PARK_DEVICES = [
 
 function hydrateDevices(devices, venues, fleetId, model = 'BanditArena-Alpha') {
   const byId = Object.fromEntries(venues.map((v) => [v.venueId, v]))
-  return devices.map((d) => {
+  return devices.map((d, index) => {
     const venue = byId[d.venueId]
+    const fallbackName = venue?.district
+      ? `${venue.district} · Bay ${index + 1}`
+      : `Treadmill ${index + 1}`
     return {
       ...d,
+      displayName: d.displayName || fallbackName,
       fleetId,
       productId: 'product-demo-treadmill',
       model,
@@ -499,5 +507,5 @@ export const GEOLOCATION_FEASIBILITY = {
   summary:
     'Feasible for Alpha demos using venue lat/lng assigned at install. Devices inherit the venue pin via heartbeat metadata; live GPS or Wi-Fi geolocation can replace or refine the pin later without a separate map product.',
   sources: ['venue_registry', 'optional_heartbeat_lastKnownLocation', 'future_gnss_or_wifi_rtt'],
-  privacy: 'Operator-tenant scoped; no continuous personal tracking — device asset location only.',
+  privacy: 'Operator-scoped; no continuous personal tracking — device asset pin only.',
 }

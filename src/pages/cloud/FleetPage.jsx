@@ -401,10 +401,12 @@ export default function FleetPage({ initialTab = 'overview' }) {
                       >
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>
-                            {instance.instanceId}
+                            {instance.displayName || instance.instanceId}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {instance.city || instance.venueId}
+                            {instance.displayName ? instance.instanceId : null}
+                            {instance.displayName ? ' · ' : null}
+                            {instance.city || instance.venueName || instance.venueId}
                             {(upd?.updateAvailable || instance.updateAvailable) && ' · update'}
                           </Typography>
                         </TableCell>
@@ -497,7 +499,7 @@ export default function FleetPage({ initialTab = 'overview' }) {
               value={buyerKind}
               onChange={(e) => setBuyerKind(e.target.value)}
             >
-              <MenuItem value="operator">Operator tenant</MenuItem>
+              <MenuItem value="operator">Operator</MenuItem>
               <MenuItem value="customer">Customer</MenuItem>
             </TextField>
             {buyerKind === 'customer' && (

@@ -15,7 +15,7 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
-import { assignVenueRole, getTenantMe, listVenueRoles, listVenues, unassignVenueRole } from '../../api/cloud'
+import { assignVenueRole, getOperatorMe, listVenueRoles, listVenues, unassignVenueRole } from '../../api/cloud'
 
 const STAFF_ROLES = [
   { id: 'bandit-operator', label: 'Operator' },
@@ -36,9 +36,9 @@ export default function StaffPage() {
   const loadVenues = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [tenantRes, venuesRes] = await Promise.all([getTenantMe(), listVenues()])
-    if (tenantRes.error && venuesRes.error) {
-      setError(tenantRes.error || venuesRes.error)
+    const [operatorRes, venuesRes] = await Promise.all([getOperatorMe(), listVenues()])
+    if (operatorRes.error && venuesRes.error) {
+      setError(operatorRes.error || venuesRes.error)
       setLoading(false)
       return
     }

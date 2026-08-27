@@ -17,7 +17,7 @@ const cloudApi = axios.create({
 
 
 let _authToken = null
-let _tenantId = null
+let _operatorId = null
 
 
 
@@ -39,17 +39,17 @@ export function setCloudAuthToken(token) {
 
 
 
-export function setCloudTenantId(tenantId) {
+export function setCloudOperatorId(operatorId) {
 
-  _tenantId = tenantId || null
+  _operatorId = operatorId || null
 
-  if (_tenantId) {
+  if (_operatorId) {
 
-    cloudApi.defaults.headers.common['X-Bandit-Tenant-Id'] = _tenantId
+    cloudApi.defaults.headers.common['X-Bandit-Operator-Id'] = _operatorId
 
   } else {
 
-    delete cloudApi.defaults.headers.common['X-Bandit-Tenant-Id']
+    delete cloudApi.defaults.headers.common['X-Bandit-Operator-Id']
 
   }
 
@@ -79,9 +79,9 @@ cloudApi.interceptors.request.use((config) => {
 
   }
 
-  if (_tenantId) {
+  if (_operatorId) {
 
-    config.headers['X-Bandit-Tenant-Id'] = _tenantId
+    config.headers['X-Bandit-Operator-Id'] = _operatorId
 
   }
 
@@ -119,9 +119,9 @@ async function request(promiseFactory) {
 
 
 
-export async function getTenantMe() {
+export async function getOperatorMe() {
 
-  return request(() => cloudApi.get('/tenants/me'))
+  return request(() => cloudApi.get('/operators/me'))
 
 }
 
@@ -571,33 +571,33 @@ export async function deactivateVenue(venueId) {
 
 
 
-export async function listTenants() {
+export async function listOperators() {
 
-  return request(() => cloudApi.get('/tenants'))
-
-}
-
-
-
-export async function createTenant(payload) {
-
-  return request(() => cloudApi.post('/tenants', payload))
+  return request(() => cloudApi.get('/operators'))
 
 }
 
 
 
-export async function patchTenant(tenantId, payload) {
+export async function createOperator(payload) {
 
-  return request(() => cloudApi.patch(`/tenants/${tenantId}`, payload))
+  return request(() => cloudApi.post('/operators', payload))
 
 }
 
 
 
-export async function deactivateTenant(tenantId) {
+export async function patchOperator(operatorId, payload) {
 
-  return request(() => cloudApi.delete(`/tenants/${tenantId}`))
+  return request(() => cloudApi.patch(`/operators/${operatorId}`, payload))
+
+}
+
+
+
+export async function deactivateOperator(operatorId) {
+
+  return request(() => cloudApi.delete(`/operators/${operatorId}`))
 
 }
 

@@ -351,7 +351,7 @@ export default function BillingPage() {
                 <TableRow key={license.licenseId}>
                   <TableCell>{license.licenseId}</TableCell>
                   <TableCell>{license.licenseTier || license.planId}</TableCell>
-                  <TableCell>{license.assignedDeviceId || '—'}</TableCell>
+                  <TableCell>{license.instanceId || '—'}</TableCell>
                   <TableCell>
                     <Chip size="small" label={license.status} color={licenseColor(license.status)} />
                   </TableCell>

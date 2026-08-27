@@ -25,7 +25,7 @@ import {
   checkEntitlement,
   createSession,
   createUser,
-  getTenantMe,
+  getOperatorMe,
   getUser,
   listUserSessions,
   listUsers,
@@ -34,6 +34,7 @@ import {
 } from '../../api/cloud'
 import { isCloudDeployment } from '../../config/runtime'
 import { SESSION_PHASE, usePlayerSession } from '../../session/PlayerSessionContext'
+import { resolveSessionDeviceContext } from '../../session/sessionDeviceContext'
 import { requestSessionHistoryForUser } from '../../nav/sessionHistoryNav'
 
 const ENROLLMENT_ACTIONS = {
@@ -62,7 +63,7 @@ function enrollmentChipColor(state) {
 export default function UsersPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [tenant, setTenant] = useState(null)
+  const [operator, setOperator] = useState(null)
   const [venues, setVenues] = useState([])
   const [users, setUsers] = useState([])
   const [selectedUser, setSelectedUser] = useState(null)
@@ -80,15 +81,15 @@ export default function UsersPage() {
   const loadUsers = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [tenantRes, usersRes, venuesRes] = await Promise.all([
-      getTenantMe(),
+    const [operatorRes, usersRes, venuesRes] = await Promise.all([
+      getOperatorMe(),
       listUsers(),
       listVenues(),
     ])
-    if (tenantRes.error || usersRes.error) {
-      setError(tenantRes.error || usersRes.error)
+    if (operatorRes.error || usersRes.error) {
+      setError(operatorRes.error || usersRes.error)
     } else {
-      setTenant(tenantRes.data?.tenant)
+      setOperator(operatorRes.data?.operator)
       setUsers(usersRes.data?.users || [])
       setVenues(venuesRes.data?.venues || [])
     }
@@ -191,10 +192,12 @@ export default function UsersPage() {
       setActionMessage(entitlement.error || 'Session blocked: enrollment not active')
       return
     }
+    const deviceCtx = await resolveSessionDeviceContext({})
     const sessionRes = await createSession({
       userId,
       mediaId: selectedMediaId,
       banditProductId: 'product-demo-treadmill',
+      ...deviceCtx,
     })
     if (sessionRes.error) {
       setActionMessage(sessionRes.error)
@@ -215,9 +218,9 @@ export default function UsersPage() {
         ? 'Enroll Player accounts here. Start a run from the header: pick a Player and Start. Age 8+ is attested when the account is created.'
         : 'Enrollment state and safety profiles for Player accounts. Creating a cloud session record does not start the treadmill.'}
     >
-      {tenant && (
+      {operator && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Operator: {tenant.name}
+          Operator: {operator.name}
           {venues.length > 0
             ? ` · Venues: ${venues.map((v) => v.name || v.venueId).join(', ')}`
             : ''}

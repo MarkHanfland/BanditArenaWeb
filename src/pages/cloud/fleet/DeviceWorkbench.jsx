@@ -261,8 +261,8 @@ export default function DeviceWorkbench({
             <Metric label="Firmware" value={device.firmwareVersion || '—'} />
             <Metric label="License" value={device.licenseTier || '—'} />
             <Metric
-              label="Location"
-              value={`${device.city || '—'}`}
+              label="Venue"
+              value={`${device.city || device.venueName || '—'}`}
               hint={device.location?.source === 'venue_pin' ? 'Venue IoT pin' : device.location?.source}
             />
             <Metric label="Utilization 30d" value={`${fin.utilizationPct ?? '—'}%`} />
@@ -352,7 +352,7 @@ export default function DeviceWorkbench({
                 <TableRow>
                   <TableCell colSpan={4}>
                     <Typography color="text.secondary">
-                      No inventory from API — demo device may not be provisioned in this tenant yet.
+                      No inventory from API — demo device may not be provisioned for this Operator yet.
                     </Typography>
                   </TableCell>
                 </TableRow>

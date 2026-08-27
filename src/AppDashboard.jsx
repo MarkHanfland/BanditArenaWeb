@@ -63,7 +63,7 @@ import MediaPage from './pages/cloud/MediaPage'
 import UsersPage from './pages/cloud/UsersPage'
 import BillingPage from './pages/cloud/BillingPage'
 import StaffPage from './pages/cloud/StaffPage'
-import OrganizationsPage from './pages/cloud/OrganizationsPage'
+import AccountsPage from './pages/cloud/AccountsPage'
 import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
 import ReservationsPage from './pages/cloud/ReservationsPage'
@@ -87,7 +87,7 @@ import {
   triggerSafetyStart,
   getAuthInfo,
 } from './api/device'
-import { setCloudAuthToken, clearCloudAuthToken, setCloudTenantId } from './api/cloud'
+import { setCloudAuthToken, clearCloudAuthToken, setCloudOperatorId } from './api/cloud'
 import {
   MENU_GROUP,
   MENU_LEAF_CATALOG,
@@ -110,7 +110,7 @@ const IMPLEMENTED_PANELS = {
   users: () => <UsersPage />,
   reservations: () => <ReservationsPage />,
   staff: () => <StaffPage />,
-  organizations: () => <OrganizationsPage />,
+  accounts: () => <AccountsPage />,
   billing: () => <BillingPage />,
   usage: () => <UsagePage />,
   fleet: () => <FleetPage />,
@@ -138,7 +138,7 @@ const MENU_ICONS = {
   'media-uploads': <CloudUploadIcon />,
   'session-recordings': <VideoLibraryIcon />,
   billing: <PaymentsIcon />,
-  organizations: <BusinessIcon />,
+  accounts: <BusinessIcon />,
   subscriptions: <CardMembershipIcon />,
   pricing: <LocalOfferIcon />,
   usage: <InsightsIcon />,
@@ -328,16 +328,16 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
 
   useEffect(() => {
     if (isCloudDeployment()) {
-      // Prefer JWT custom:tenantId; Alpha staff tokens often omit it → demo tenant.
-      const fromToken = readTenantIdFromJwt(idToken || cloudAuthToken)
-      setCloudTenantId(fromToken || 'tenant-demo-001')
+      // Prefer JWT custom:operatorId; Alpha staff tokens often omit it → demo operator.
+      const fromToken = readOperatorIdFromJwt(idToken || cloudAuthToken)
+      setCloudOperatorId(fromToken || 'operator-demo-001')
       return undefined
     }
 
     let cancelled = false
     getAuthInfo().then(({ data }) => {
-      if (!cancelled && data?.tenantId) {
-        setCloudTenantId(data.tenantId)
+      if (!cancelled && data?.operatorId) {
+        setCloudOperatorId(data.operatorId)
       }
     })
     return () => {
@@ -633,7 +633,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   )
 }
 
-function readTenantIdFromJwt(token) {
+function readOperatorIdFromJwt(token) {
   if (!token || typeof token !== 'string' || !token.includes('.')) {
     return null
   }
@@ -641,8 +641,8 @@ function readTenantIdFromJwt(token) {
     const [, payloadB64] = token.split('.')
     const json = atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/'))
     const payload = JSON.parse(json)
-    const tenantId = payload['custom:tenantId'] || payload['custom:tenant_id'] || payload.tenantId
-    return typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : null
+    const operatorId = payload['custom:operatorId'] || payload['custom:operator_id'] || payload.operatorId
+    return typeof operatorId === 'string' && operatorId.trim() ? operatorId.trim() : null
   } catch {
     return null
   }
