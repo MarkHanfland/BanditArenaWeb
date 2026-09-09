@@ -99,7 +99,7 @@ test('content publish flow adds a VR title', async ({ page }) => {
   await page.getByLabel('Name').fill('Desert Dash');
   await page.getByLabel('Description').fill('A demo VR trail');
   await page.getByRole('button', { name: 'Create' }).click();
-  await expect(page.getByText(/Created Desert Dash|Desert Dash/)).toBeVisible();
+  await expect(page.getByText('Created Desert Dash')).toBeVisible();
 });
 
 test('media royalties tab shows play-time report', async ({ page }) => {
