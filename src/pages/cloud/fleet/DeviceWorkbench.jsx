@@ -27,6 +27,7 @@ import {
   createDeviceMaintenance,
   createSupportTicket,
   decommissionDevice,
+  getModelInventoryPreset,
   getDeviceInventory,
   issueLicense,
   listDeviceMaintenance,
@@ -35,6 +36,15 @@ import {
   queueDiagnosticCommand,
   transferDevice,
 } from '../../../api/cloud'
+import MachineGlbViewer from '../../../components/cloud/MachineGlbViewer'
+
+function inferProductId(device) {
+  const value = String(device?.productId || device?.banditProductId || device?.model || '')
+  if (value.startsWith('bandit-arena-') || value.startsWith('product-')) return value
+  if (/pro/i.test(value)) return 'bandit-arena-pro'
+  if (/core/i.test(value)) return 'bandit-arena-core'
+  return 'product-demo-treadmill'
+}
 
 const TAB_IDS = [
   'overview',
@@ -100,6 +110,7 @@ export default function DeviceWorkbench({
   const [transferVenueId, setTransferVenueId] = useState('')
   const [diagCommand, setDiagCommand] = useState('RUN_SELF_TEST')
   const [ticketSubject, setTicketSubject] = useState('')
+  const [modelGlbUrl, setModelGlbUrl] = useState(null)
 
   useEffect(() => {
     setTab(TAB_IDS.includes(initialTab) ? initialTab : 'overview')
@@ -120,8 +131,10 @@ export default function DeviceWorkbench({
     setCommands(diag.data?.commands || [])
     setTickets(tix.data?.tickets || [])
     setUpdateInfo(upd.data || null)
+    const preset = await getModelInventoryPreset(inferProductId(device))
+    setModelGlbUrl(preset.data?.product?.modelGlbUrl || null)
     setLoadingDetail(false)
-  }, [device?.instanceId])
+  }, [device?.instanceId, device?.productId, device?.model])
 
   useEffect(() => {
     loadSideData()
@@ -267,6 +280,7 @@ export default function DeviceWorkbench({
             />
             <Metric label="Utilization 30d" value={`${fin.utilizationPct ?? '—'}%`} />
           </Stack>
+          <MachineGlbViewer src={modelGlbUrl} label={device.model || device.instanceId} />
           <Alert severity="info" variant="outlined">
             Geolocation uses the venue registry pin today. Heartbeat can later attach{' '}
             <code>lastKnownLocation</code> from GNSS or Wi‑Fi without changing this workbench.

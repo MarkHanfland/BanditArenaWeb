@@ -13,6 +13,7 @@ import {
   acknowledgeAlert,
   getAnalyticsSummary,
   getFleetAnalytics,
+  getPlayerAnalytics,
   listAlerts,
   listNotifications,
   sendNotification,
@@ -137,6 +138,7 @@ export default function UsagePage() {
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
   const [fleet, setFleet] = useState(null)
+  const [player, setPlayer] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [notifications, setNotifications] = useState([])
   const [actionMessage, setActionMessage] = useState('')
@@ -156,11 +158,16 @@ export default function UsagePage() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const [summaryRes, fleetRes] = await Promise.all([getAnalyticsSummary(), getFleetAnalytics()])
+      const [summaryRes, fleetRes, playerRes] = await Promise.all([
+        getAnalyticsSummary(),
+        getFleetAnalytics(),
+        getPlayerAnalytics('user-demo-001'),
+      ])
       if (!mounted) return
       if (summaryRes.error) setError(summaryRes.error)
       else setSummary(summaryRes.data)
       if (!fleetRes.error) setFleet(fleetRes.data)
+      if (!playerRes.error) setPlayer(playerRes.data)
       await refreshAlertsAndHistory()
       if (mounted) setLoading(false)
     })()
@@ -184,6 +191,23 @@ export default function UsagePage() {
       return
     }
     setActionMessage(data?.message || `Acknowledged ${alertId}`)
+    await refreshAlertsAndHistory()
+  }
+
+  const handleSendPush = async () => {
+    setSendingNotif(true)
+    setActionMessage('')
+    const { error: sendError, data } = await sendNotification({
+      userId: 'user-demo-001',
+      channel: 'push',
+      template: 'session_reminder',
+    })
+    setSendingNotif(false)
+    if (sendError) {
+      setActionMessage(sendError)
+      return
+    }
+    setActionMessage(data?.message || 'Push queued')
     await refreshAlertsAndHistory()
   }
 
@@ -278,6 +302,18 @@ export default function UsagePage() {
               {(summary?.weeklySessionTrend || []).join(' → ')}
             </Typography>
           </Box>
+
+          {player ? (
+            <Box data-testid="analytics-player">
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1 }}>
+                Player analytics
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {(player.playerName || player.userId) +
+                  ` · ${player.sessionCount ?? 0} sessions · ${Math.round(Number(player.averageDurationSeconds || 0))}s avg`}
+              </Typography>
+            </Box>
+          ) : null}
 
           {fleet ? (
             <Box data-testid="analytics-fleet-live">
@@ -384,15 +420,26 @@ export default function UsagePage() {
               <Typography variant="subtitle2" sx={{ color: '#fff' }}>
                 Notification history
               </Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                disabled={sendingNotif}
-                data-testid="send-session-reminder"
-                onClick={handleSendReminder}
-              >
-                {sendingNotif ? 'Sending…' : 'Send reminder'}
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={sendingNotif}
+                  data-testid="send-session-reminder"
+                  onClick={handleSendReminder}
+                >
+                  {sendingNotif ? 'Sending…' : 'Send reminder'}
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={sendingNotif}
+                  data-testid="send-push-reminder"
+                  onClick={handleSendPush}
+                >
+                  {sendingNotif ? 'Sending…' : 'Send push'}
+                </Button>
+              </Stack>
             </Stack>
             {notifications.length === 0 ? (
               <Typography variant="body2" color="text.secondary" data-testid="analytics-notifications-empty">

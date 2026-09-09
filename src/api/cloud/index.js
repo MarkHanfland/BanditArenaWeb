@@ -79,6 +79,7 @@ export {
   listAlertRules,
   getAnalyticsSummary,
   getFleetAnalytics,
+  getPlayerAnalytics,
   listSupportTickets,
   createSupportTicket,
   listDiagnosticCommands,
@@ -87,6 +88,9 @@ export {
   checkCommerceCompatibility,
   listCommerceOrders,
   createCommerceOrder,
+  listCommerceQuotes,
+  getCommerceQuote,
+  createCommerceQuote,
   getRevenueReport,
   listCatalogModels,
 } from './client'

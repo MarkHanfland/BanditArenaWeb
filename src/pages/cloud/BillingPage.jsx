@@ -25,12 +25,14 @@ import PageScaffold from '../../components/shared/PageScaffold'
 import {
   checkCommerceCompatibility,
   createCommerceOrder,
+  createCommerceQuote,
   getModelInventoryPreset,
   getRevenueReport,
   issueLicense,
   listCatalogModels,
   listCommerceOfferings,
   listCommerceOrders,
+  listCommerceQuotes,
   listLicensePlans,
   listLicenses,
   listProductInstances,
@@ -67,6 +69,7 @@ export default function BillingPage() {
   const [message, setMessage] = useState('')
   const [offerings, setOfferings] = useState([])
   const [orders, setOrders] = useState([])
+  const [quotes, setQuotes] = useState([])
   const [models, setModels] = useState([])
   const [preset, setPreset] = useState([])
   const [selectedModel, setSelectedModel] = useState('bandit-arena-core')
@@ -81,6 +84,9 @@ export default function BillingPage() {
   const [orderSku, setOrderSku] = useState('BA-SPARE-MEMBRANE')
   const [orderDevice, setOrderDevice] = useState('instance-demo-001')
   const [compatNote, setCompatNote] = useState('')
+  const [quoteOpen, setQuoteOpen] = useState(false)
+  const [quoteSku, setQuoteSku] = useState('BA-CORE-BUNDLE')
+  const [quoteQty, setQuoteQty] = useState(2)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -88,6 +94,7 @@ export default function BillingPage() {
     const [
       offeringsRes,
       ordersRes,
+      quotesRes,
       modelsRes,
       revenueRes,
       licensesRes,
@@ -96,6 +103,7 @@ export default function BillingPage() {
     ] = await Promise.all([
       listCommerceOfferings(),
       listCommerceOrders(),
+      listCommerceQuotes(),
       listCatalogModels(),
       getRevenueReport(),
       listLicenses(),
@@ -105,6 +113,7 @@ export default function BillingPage() {
     if (offeringsRes.error) setError(offeringsRes.error)
     setOfferings(offeringsRes.data?.offerings || [])
     setOrders(ordersRes.data?.orders || [])
+    setQuotes(quotesRes.data?.quotes || [])
     setModels(modelsRes.data?.products || [])
     setRevenue(revenueRes.data || null)
     setLicenses(licensesRes.data?.licenses || [])
@@ -186,11 +195,29 @@ export default function BillingPage() {
     await loadAll()
   }
 
+  const handleQuote = async () => {
+    setMessage('')
+    const quantity = Math.max(1, Number(quoteQty) || 1)
+    const { data, error: apiError } = await createCommerceQuote({
+      lines: [{ skuId: quoteSku, quantity }],
+      buyerKind: 'customer',
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setQuoteOpen(false)
+    setMessage(
+      `Quote ${data?.quote?.quoteId} · ${usd(data?.quote?.totalUsd)} · no payment`,
+    )
+    await loadAll()
+  }
+
   return (
     <PageScaffold
       title="Commerce"
       category="Cloud"
-      description="Offerings, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
+      description="Offerings, enterprise quotes (no payment), Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
@@ -208,6 +235,7 @@ export default function BillingPage() {
         scrollButtons="auto"
       >
         <Tab label="Offerings" value="offerings" data-testid="commerce-tab-offerings" />
+        <Tab label="Quotes" value="quotes" data-testid="commerce-tab-quotes" />
         <Tab label="Models & BOM" value="models" data-testid="commerce-tab-models" />
         <Tab label="Licensing" value="licensing" data-testid="commerce-tab-licensing" />
         <Tab label="Revenue" value="revenue" data-testid="commerce-tab-revenue" />
@@ -263,6 +291,49 @@ export default function BillingPage() {
                   <TableCell align="right">{usd(o.totalUsd)}</TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        </Stack>
+      )}
+
+      {!loading && tab === 'quotes' && (
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" data-testid="commerce-create-quote" onClick={() => setQuoteOpen(true)}>
+              Create quote
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Multi-unit enterprise quotes do not charge a payment processor and do not create an order.
+          </Typography>
+          <Table size="small" data-testid="commerce-quotes-table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Quote</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Units</TableCell>
+                <TableCell>Stream</TableCell>
+                <TableCell align="right">Total</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {quotes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography color="text.secondary">No quotes yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                quotes.map((q) => (
+                  <TableRow key={q.quoteId}>
+                    <TableCell>{q.quoteId}</TableCell>
+                    <TableCell>{q.status}</TableCell>
+                    <TableCell>{q.unitCount ?? '—'}</TableCell>
+                    <TableCell>{q.stream}</TableCell>
+                    <TableCell align="right">{usd(q.totalUsd)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </Stack>
@@ -510,6 +581,42 @@ export default function BillingPage() {
           <Button onClick={() => setOrderOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleOrder} data-testid="order-submit">
             Submit order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={quoteOpen} onClose={() => setQuoteOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create enterprise quote</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              select
+              label="SKU"
+              fullWidth
+              value={quoteSku}
+              onChange={(e) => setQuoteSku(e.target.value)}
+              inputProps={{ 'data-testid': 'quote-sku' }}
+            >
+              {offerings.map((o) => (
+                <MenuItem key={o.skuId} value={o.skuId}>
+                  {o.skuId} · {o.offeringType}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Quantity"
+              fullWidth
+              value={quoteQty}
+              onChange={(e) => setQuoteQty(e.target.value)}
+              inputProps={{ 'data-testid': 'quote-qty', min: 1 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuoteOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleQuote} data-testid="quote-submit">
+            Save quote
           </Button>
         </DialogActions>
       </Dialog>

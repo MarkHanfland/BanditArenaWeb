@@ -38,3 +38,7 @@ export async function signInAsVenueAdmin(page) {
 export async function signInAsFleetAdmin(page) {
   await signInAs(page, 'fleetAdmin');
 }
+
+export async function signInAsCloudAdmin(page) {
+  await signInAs(page, 'cloudAdmin');
+}

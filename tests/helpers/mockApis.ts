@@ -13,6 +13,11 @@ const demoVenue = {
   timezone: 'America/Chicago',
   ownerCustomerId: 'customer-demo-001',
   ownerOrgId: 'customer-demo-001',
+  latitude: 41.8781,
+  longitude: -87.6298,
+  lat: 41.8781,
+  lng: -87.6298,
+  formattedAddress: 'Chicago, IL',
 };
 
 const demoCustomer = {
@@ -107,6 +112,7 @@ export function createCloudFixture() {
   const tickets: Array<Record<string, unknown>> = [];
   const diagCommands: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
+  const quotes: Array<Record<string, unknown>> = [];
   const offerings: Array<Record<string, unknown>> = [
     {
       skuId: 'BA-CORE-BUNDLE',
@@ -200,12 +206,14 @@ export function createCloudFixture() {
     tickets,
     diagCommands,
     orders,
+    quotes,
     offerings,
     alerts,
     notifications,
     sessions,
     opsLogs: [] as Array<Record<string, unknown>>,
     opsIncidents: [] as Array<Record<string, unknown>>,
+    denyFleetAnalytics: true,
   };
 }
 
@@ -355,6 +363,72 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         safetyProfile: user.safetyProfile || null,
       });
     }
+    if (path === '/audit/logs' && method === 'GET') {
+      return json({
+        message: 'Audit log',
+        entries: fixture.auditLogs || [],
+        count: (fixture.auditLogs || []).length,
+      });
+    }
+    if (path === '/audit/data-export' && method === 'POST') {
+      return json(
+        {
+          message: 'Data export ready',
+          exportId: 'exp-demo-001',
+          exportStatus: 'ready',
+          subjectUserId: body.subjectUserId || body.userId,
+          payload: { user: null, sessions: [] },
+        },
+        202,
+      );
+    }
+    if (path === '/audit/erasure' && method === 'POST') {
+      return json({
+        message: 'Subject anonymized',
+        subjectUserId: body.subjectUserId || body.userId,
+        user: { erased: true, name: 'ANONYMIZED' },
+      });
+    }
+    if (path === '/audit/ccpa-opt-out' && method === 'POST') {
+      return json({
+        message: 'CCPA opt-out recorded',
+        subjectUserId: body.subjectUserId || body.userId,
+        ccpaOptOut: true,
+        dataSaleAllowed: false,
+      });
+    }
+    if (path === '/audit/consents' && method === 'GET') {
+      return json({ message: 'Consent records', consents: fixture.consents || [], count: 0 });
+    }
+    if (path === '/audit/consents' && method === 'POST') {
+      return json(
+        {
+          message: 'Consent recorded',
+          consent: {
+            consentId: 'con-demo-001',
+            userId: body.subjectUserId || body.userId,
+            purpose: body.purpose,
+            granted: true,
+          },
+        },
+        201,
+      );
+    }
+    if (/^\/audit\/consents\/[^/]+\/revoke$/.test(path) && method === 'POST') {
+      return json({ message: 'Consent revoked', consent: { granted: false } });
+    }
+    if (path === '/audit/retention-policies' && method === 'GET') {
+      return json({ message: 'Retention policies', policies: fixture.retentionPolicies || [] });
+    }
+    {
+      const retentionMatch = path.match(/^\/audit\/retention-policies\/([^/]+)$/);
+      if (retentionMatch && method === 'PUT') {
+        return json({
+          message: 'Retention policy saved',
+          policy: { dataClass: retentionMatch[1], retentionDays: body.retentionDays },
+        });
+      }
+    }
     if (path === '/sessions' && method === 'GET') {
       const userId = url.searchParams.get('userId');
       const venueId = url.searchParams.get('venueId');
@@ -366,15 +440,27 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       return json({ message: 'Sessions', sessions, count: sessions.length, cursor: null });
     }
     if (path === '/ops/logs' && method === 'GET') {
+      const operatorId = url.searchParams.get('operatorId');
+      let entries = fixture.opsLogs || [];
+      if (operatorId && operatorId !== 'all') {
+        entries = entries.filter((entry) => entry.operatorId === operatorId);
+      }
       return json({
         message: 'Operational logs',
-        entries: fixture.opsLogs || [],
+        entries,
+        scope: operatorId && operatorId !== 'all' ? 'operator' : 'all',
       });
     }
     if (path === '/ops/incidents' && method === 'GET') {
+      const operatorId = url.searchParams.get('operatorId');
+      let incidents = fixture.opsIncidents || [];
+      if (operatorId && operatorId !== 'all') {
+        incidents = incidents.filter((item) => item.operatorId === operatorId);
+      }
       return json({
         message: 'Platform incidents',
-        incidents: fixture.opsIncidents || [],
+        incidents,
+        scope: operatorId && operatorId !== 'all' ? 'operator' : 'all',
       });
     }
     {
@@ -464,6 +550,9 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       });
     }
     if (path === '/analytics/fleet') {
+      if (fixture.denyFleetAnalytics) {
+        return json({ error: 'Cloud or fleet administrator required', code: 'ADMIN_REQUIRED' }, 403);
+      }
       return json({
         message: 'Fleet analytics',
         sessionCount: 5,
@@ -491,6 +580,23 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
           },
         ],
       });
+    }
+    if (/^\/analytics\/players\/[^/]+$/.test(path) && method === 'GET') {
+      const userId = path.split('/')[3];
+      const user = fixture.users.find((u) => u.userId === userId);
+      if (!user) return json({ error: 'User not found' }, 404);
+      return json({
+        message: 'Player analytics',
+        userId,
+        playerName: user.name,
+        sessionCount: 3,
+        averageDurationSeconds: 400,
+        distanceMeters: 1200,
+        weeklySessionTrend: [0, 1, 0, 1, 0, 0, 1],
+      });
+    }
+    if (/^\/users\/[^/]+\/push-tokens$/.test(path) && method === 'PUT') {
+      return json({ message: 'Push token saved' });
     }
     if (path === '/alert-rules' && method === 'GET') {
       return json({
@@ -714,7 +820,43 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       if (slot) {
         slot.status = 'booked';
       }
-      return json({ reservation: { slotId: body.slotId, userId: body.userId, status: 'booked' }, message: 'Reservation confirmed' }, 201);
+      const notification = {
+        notificationId: `notif-book-${body.slotId}`,
+        status: 'queued',
+        channel: 'email',
+        template: 'reservation_confirmed',
+      };
+      fixture.notifications.unshift({
+        ...notification,
+        userId: body.userId || 'user-demo-001',
+        templateId: notification.template,
+      });
+      return json({
+        reservation: { slotId: body.slotId, userId: body.userId, status: 'booked' },
+        message: 'Reservation confirmed',
+        notification,
+      }, 201);
+    }
+    if (path.match(/^\/reservations\/[^/]+\/cancel$/) && method === 'POST') {
+      const slotId = path.split('/')[2];
+      const slot = fixture.reservations.find((entry) => entry.slotId === slotId);
+      if (slot) slot.status = 'cancelled';
+      const notification = {
+        notificationId: `notif-cancel-${slotId}`,
+        status: 'queued',
+        channel: 'email',
+        template: 'reservation_cancelled',
+      };
+      fixture.notifications.unshift({
+        ...notification,
+        userId: slot?.userId || 'user-demo-001',
+        templateId: notification.template,
+      });
+      return json({
+        reservation: { slotId, status: 'cancelled' },
+        message: 'Reservation cancelled',
+        notification,
+      });
     }
     if (path === '/entitlements/check') {
       const body = route.request().postDataJSON();
@@ -798,6 +940,33 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path === '/commerce/orders' && method === 'GET') {
       return json({ orders: fixture.orders || [], message: 'Commerce orders' });
     }
+    if (path === '/commerce/quotes' && method === 'GET') {
+      return json({ quotes: fixture.quotes || [], message: 'Commerce quotes' });
+    }
+    if (path.match(/^\/commerce\/quotes\/[^/]+$/) && method === 'GET') {
+      const quoteId = path.split('/').pop();
+      const quote = (fixture.quotes || []).find((item) => item.quoteId === quoteId);
+      if (!quote) return json({ error: 'Quote not found', code: 'QUOTE_NOT_FOUND' }, 404);
+      return json({ quote, message: 'Commerce quote' });
+    }
+    if (path === '/commerce/quotes' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const line = (body.lines || [])[0] || {};
+      const offering = (fixture.offerings || []).find((item) => item.skuId === line.skuId);
+      const quantity = Math.max(1, Number(line.quantity) || 1);
+      const unitPriceUsd = Number(offering?.unitPriceUsd) || 25000;
+      const quote = {
+        quoteId: `qte-${Date.now()}`,
+        status: 'open',
+        paymentTriggered: false,
+        stream: offering?.stream || 'hardware',
+        totalUsd: unitPriceUsd * quantity,
+        unitCount: offering?.offeringType === 'primary_system' ? quantity : 0,
+        lines: body.lines || [],
+      };
+      fixture.quotes = [...(fixture.quotes || []), quote];
+      return json({ quote, message: 'Quote created (no payment)' }, 201);
+    }
     if (path === '/commerce/orders' && method === 'POST') {
       const body = route.request().postDataJSON() || {};
       const line = (body.lines || [])[0] || {};
@@ -836,9 +1005,25 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path === '/catalog/models' && method === 'GET') {
       return json({
         products: [
-          { productId: 'bandit-arena-core', name: 'Bandit Arena Core' },
-          { productId: 'bandit-arena-pro', name: 'Bandit Arena Pro' },
-          { productId: 'product-demo-treadmill', name: 'Alpha lab' },
+          {
+            productId: 'bandit-arena-core',
+            name: 'Bandit Arena Core',
+            model: 'BanditArena-Core',
+            modelGlbObjectKey: 'models/bandit-arena-core/model.glb',
+            modelGlbUrl: null,
+          },
+          {
+            productId: 'bandit-arena-pro',
+            name: 'Bandit Arena Pro',
+            model: 'BanditArena-Pro',
+            modelGlbObjectKey: 'models/bandit-arena-pro/model.glb',
+            modelGlbUrl: null,
+          },
+          {
+            productId: 'product-demo-treadmill',
+            name: 'Alpha lab',
+            model: 'BanditArena-Alpha',
+          },
         ],
         message: 'Treadmill models',
       });
@@ -846,7 +1031,11 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path.match(/^\/products\/[^/]+\/inventory-preset$/) && method === 'GET') {
       const id = path.split('/')[2];
       return json({
-        product: { productId: id },
+        product: {
+          productId: id,
+          modelGlbObjectKey: id.startsWith('bandit-arena-') ? `models/${id}/model.glb` : null,
+          modelGlbUrl: null,
+        },
         inventory: [
           {
             componentId: 'hw-compute',

@@ -120,19 +120,25 @@ export default function ReservationsPage() {
         flash(apiError, 'error')
         return
       }
-      await sendNotification({
-        userId: selectedUserId,
-        template: 'session_reminder',
-        channel: 'email',
-        variables: { slotId },
-      })
+      if (!data?.notification) {
+        await sendNotification({
+          userId: selectedUserId,
+          template: 'session_reminder',
+          channel: 'email',
+          variables: { slotId },
+        })
+      }
       const bookedUser = users.find((user) => user.userId === selectedUserId)
       rememberPlayer({
         userId: selectedUserId,
         displayName: bookedUser?.name || selectedUserId,
       })
+      const confirmNote =
+        data?.notification?.status === 'failed'
+          ? 'Confirmation enqueue failed (booking kept).'
+          : 'Confirmation queued.'
       flash(
-        `Booked ${data?.reservation?.slotId || slotId} for ${bookedUser?.name || selectedUserId}. Reminder queued.`,
+        `Booked ${data?.reservation?.slotId || slotId} for ${bookedUser?.name || selectedUserId}. ${confirmNote}`,
         'success',
       )
       await loadData()
@@ -147,12 +153,18 @@ export default function ReservationsPage() {
     setBusySlotId(slotId)
     flash('')
     try {
-      const { error: apiError } = await action()
+      const { data, error: apiError } = await action()
       if (apiError) {
         flash(apiError, 'error')
         return
       }
-      flash(`${label} ${slotId}`, 'success')
+      const confirmNote =
+        data?.notification?.status === 'failed'
+          ? ' Confirmation enqueue failed (change kept).'
+          : data?.notification
+            ? ' Confirmation queued.'
+            : ''
+      flash(`${label} ${slotId}.${confirmNote}`, 'success')
       await loadData()
     } catch (err) {
       flash(err?.message || `${label} failed`, 'error')
