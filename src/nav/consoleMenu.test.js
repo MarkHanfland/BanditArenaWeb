@@ -28,7 +28,7 @@ test('pillars include Alpha and roadmap leaves', () => {
   )
   assert.ok(fleet.itemIds.includes('fleet'))
   assert.ok(fleet.itemIds.includes('diagnostics'))
-  assert.deepEqual(admin.itemIds, ['roles', 'integrations', 'branding', 'audit'])
+  assert.deepEqual(admin.itemIds, ['roles', 'integrations', 'branding', 'service-logs', 'audit'])
 })
 
 test('initialExpandedGroupIds opens only Local when online', () => {
@@ -43,7 +43,7 @@ test('buildMenuGroups includes Administration when roadmap leaves are provided',
   )
   const groups = buildMenuGroups(itemsById)
   assert.ok(groups.some((g) => g.id === MENU_GROUP.ADMINISTRATION))
-  assert.equal(groups.find((g) => g.id === MENU_GROUP.ADMINISTRATION).items.length, 4)
+  assert.equal(groups.find((g) => g.id === MENU_GROUP.ADMINISTRATION).items.length, 5)
 })
 
 test('firstCloudLanding skips unimplemented leaves', () => {
@@ -70,6 +70,7 @@ test('firstCloudLanding skips unimplemented leaves', () => {
 test('FUTURE_MENU_LEAVES and implemented flags match catalog', () => {
   assert.equal(isMenuItemImplemented('fleet'), true)
   assert.equal(isMenuItemImplemented('sessions'), true)
+  assert.equal(isMenuItemImplemented('service-logs'), true)
   assert.equal(isMenuItemImplemented('notifications'), false)
   assert.ok(FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS].some((l) => l.id === 'notifications'))
   assert.ok(!FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS]?.some((l) => l.id === 'sessions'))

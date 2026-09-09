@@ -36,6 +36,7 @@ test('device dashboard, treadmill, events, services, and config pages load', asy
   await page.getByTestId('menu-config').click();
   await expect(page.getByText('System Configuration')).toBeVisible();
   await expect(page.getByTestId('config-save')).toBeVisible();
+  await expect(page.getByText('Machine profile')).toBeVisible();
 });
 
 test('header session start and end for an enrolled player', async ({ page }) => {

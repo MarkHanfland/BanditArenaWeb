@@ -107,6 +107,7 @@ export async function startSession({
   testMedia = false,
   simulationMode = '',
   deterministicConfig = '',
+  capabilities = [],
 }) {
   try {
     const response = await deviceApi.post(
@@ -119,6 +120,7 @@ export async function startSession({
         testMedia: Boolean(testMedia),
         simulationMode: simulationMode || '',
         deterministicConfig: deterministicConfig || '',
+        capabilities: Array.isArray(capabilities) ? capabilities : [],
       },
       // Test-media sessions start CameraSimulator then wait for tracking (can exceed default 5s).
       { timeout: 35000 },

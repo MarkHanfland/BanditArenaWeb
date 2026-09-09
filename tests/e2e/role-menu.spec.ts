@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { getTestAdministratorUser } from '../helpers/testCredentials';
+import { resolveE2eAdminUser } from '../helpers/auth';
 import { expandAllMenuGroups } from '../helpers/menuNav';
 import { mockConsoleApis } from '../helpers/mockApis';
 
 type RoleCase = {
-  roleId: 'operator' | 'technician' | 'venueAdmin';
+  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin';
   expected: string[];
   expectedDisabled: string[];
   notExpected: string[];
@@ -101,6 +101,17 @@ const roleCases: RoleCase[] = [
       'menu-branding',
       'menu-audit',
     ],
+    notExpected: ['menu-maintenance', 'menu-service-logs'],
+  },
+  {
+    roleId: 'fleetAdmin',
+    expected: [
+      'menu-dashboard',
+      'menu-sessions',
+      'menu-service-logs',
+      'menu-group-administration',
+    ],
+    expectedDisabled: ['menu-roles', 'menu-audit'],
     notExpected: ['menu-maintenance'],
   },
 ];
@@ -108,7 +119,7 @@ const roleCases: RoleCase[] = [
 for (const roleCase of roleCases) {
   test(`renders the correct pillar menu for ${roleCase.roleId}`, async ({ page }) => {
     await mockConsoleApis(page);
-    const user = getTestAdministratorUser(roleCase.roleId);
+    const user = resolveE2eAdminUser(roleCase.roleId);
 
     await page.goto('/?e2eAuthBypass=true');
 

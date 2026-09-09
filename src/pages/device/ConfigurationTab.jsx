@@ -134,6 +134,21 @@ const fieldMetadata = {
   'keyboard_turn_speed': { type: 'number', min: 0.5, max: 5, step: 0.1, label: 'Keyboard Turn Speed (rad/s)' },
 }
 
+const PROFILE_DEFAULTS = {
+  'lab-sim': {
+    providers: { skeleton: 'CameraSimulator', motors: 'MotorSimulator', tilt: 'MotorSimulator' },
+    allowSimulation: true,
+  },
+  'venue-kinect': {
+    providers: { skeleton: 'Kinect Camera', motors: 'MotorSimulator', tilt: 'MotorSimulator' },
+    allowSimulation: false,
+  },
+  'venue-live': {
+    providers: { skeleton: 'Kinect Camera', motors: 'hardware', tilt: 'ActuatorController' },
+    allowSimulation: false,
+  },
+}
+
 // Render a single config field with appropriate control
 function ConfigField({ fieldKey, value, onChange, disabled }) {
   const metadata = fieldMetadata[fieldKey] || {}
@@ -221,8 +236,20 @@ function ConfigField({ fieldKey, value, onChange, disabled }) {
   }
 }
 
+function serviceRoleLabel(service) {
+  if (!service?.enabled) return 'Not on this machine'
+  if (service.lifecycle === 'session') return 'Session'
+  return 'Core'
+}
+
+function serviceRoleTone(service) {
+  if (!service?.enabled) return 'default'
+  if (service.lifecycle === 'session') return 'warning'
+  return 'success'
+}
+
 // Service configuration card
-function ServiceCard({ service, index, onUpdate, disabled }) {
+function ServiceCard({ service, index, onUpdate, disabled, resolvedView }) {
   const [expanded, setExpanded] = useState(false)
   
   const handlePropertyChange = (key, value) => {
@@ -268,17 +295,25 @@ function ServiceCard({ service, index, onUpdate, disabled }) {
           </Typography>
         </Box>
         
-        <FormControlLabel
-          control={
-            <Switch
-              checked={service.enabled}
-              onChange={(e) => handlePropertyChange('enabled', e.target.checked ? 'true' : 'false')}
-              disabled={disabled}
-              color="success"
-            />
-          }
-          label={service.enabled ? 'Enabled' : 'Disabled'}
-        />
+        {resolvedView ? (
+          <Chip
+            label={serviceRoleLabel(service)}
+            color={serviceRoleTone(service)}
+            size="small"
+          />
+        ) : (
+          <FormControlLabel
+            control={
+              <Switch
+                checked={service.enabled}
+                onChange={(e) => handlePropertyChange('enabled', e.target.checked ? 'true' : 'false')}
+                disabled={disabled}
+                color="success"
+              />
+            }
+            label={service.enabled ? 'Enabled' : 'Disabled'}
+          />
+        )}
         
         <IconButton onClick={() => setExpanded(!expanded)} size="small">
           <ExpandMoreIcon sx={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
@@ -292,17 +327,19 @@ function ServiceCard({ service, index, onUpdate, disabled }) {
           </Typography>
           
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 2 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={service.createNewConsole}
-                  onChange={(e) => handlePropertyChange('createNewConsole', e.target.checked ? 'true' : 'false')}
-                  disabled={disabled}
-                  size="small"
-                />
-              }
-              label="Create New Console"
-            />
+            {!resolvedView && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={service.createNewConsole}
+                    onChange={(e) => handlePropertyChange('createNewConsole', e.target.checked ? 'true' : 'false')}
+                    disabled={disabled}
+                    size="small"
+                  />
+                }
+                label="Create New Console"
+              />
+            )}
             
             {service.properties && Object.entries(service.properties).map(([key, value]) => (
               <ConfigField
@@ -310,7 +347,7 @@ function ServiceCard({ service, index, onUpdate, disabled }) {
                 fieldKey={key}
                 value={value}
                 onChange={(k, v) => handlePropertyChange(k, v)}
-                disabled={disabled}
+                disabled={disabled || resolvedView}
               />
             ))}
           </Box>
@@ -387,6 +424,37 @@ function ConfigurationTab({ treadmillState = null }) {
         [key]: value
       }
     }))
+  }
+
+  const handleProfileChange = (value) => {
+    const defaults = PROFILE_DEFAULTS[value]
+    setConfig(prev => {
+      const caps = [...(prev.allowedCapabilities || [])].filter((cap) => cap !== 'simulation')
+      if (defaults?.allowSimulation && !caps.includes('simulation')) {
+        caps.push('simulation')
+      }
+      return {
+        ...prev,
+        profile: value,
+        providers: defaults?.providers || prev.providers,
+        allowedCapabilities: caps,
+      }
+    })
+  }
+
+  const handleProviderChange = (role, value) => {
+    setConfig(prev => ({
+      ...prev,
+      providers: { ...(prev.providers || {}), [role]: value },
+    }))
+  }
+
+  const handleAllowedCapabilitiesChange = (value) => {
+    const caps = String(value)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+    setConfig(prev => ({ ...prev, allowedCapabilities: caps }))
   }
 
   const handleServiceUpdate = (index, updatedService) => {
@@ -594,6 +662,86 @@ function ConfigurationTab({ treadmillState = null }) {
       {/* Tab Panel: Bandit Arena Configuration */}
       {activeTab === 0 && (
         <Box>
+          {config?.composed && (
+            <Accordion
+              expanded={expandedSections.profile ?? true}
+              onChange={() => toggleSection('profile')}
+              sx={{ mb: 1 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {sectionIcons.machine}
+                  <Typography sx={{ fontWeight: 500 }}>Machine profile</Typography>
+                  <Chip label={config.profile || 'custom'} size="small" />
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  This box: profile and providers. Core services are derived. Save writes the machine file, not the service catalog.
+                </Typography>
+                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 2 }}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Profile</InputLabel>
+                    <Select
+                      label="Profile"
+                      value={config.profile || ''}
+                      onChange={(e) => handleProfileChange(e.target.value)}
+                      disabled={saving}
+                    >
+                      <MenuItem value="lab-sim">lab-sim</MenuItem>
+                      <MenuItem value="venue-kinect">venue-kinect</MenuItem>
+                      <MenuItem value="venue-live">venue-live</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Skeleton provider</InputLabel>
+                    <Select
+                      label="Skeleton provider"
+                      value={config.providers?.skeleton || ''}
+                      onChange={(e) => handleProviderChange('skeleton', e.target.value)}
+                      disabled={saving}
+                    >
+                      <MenuItem value="CameraSimulator">Camera Simulator</MenuItem>
+                      <MenuItem value="Kinect Camera">Kinect Camera</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Motors</InputLabel>
+                    <Select
+                      label="Motors"
+                      value={config.providers?.motors || ''}
+                      onChange={(e) => handleProviderChange('motors', e.target.value)}
+                      disabled={saving}
+                    >
+                      <MenuItem value="MotorSimulator">Motor Simulator</MenuItem>
+                      <MenuItem value="hardware">Hardware (VESC + stepper)</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel>Tilt</InputLabel>
+                    <Select
+                      label="Tilt"
+                      value={config.providers?.tilt || ''}
+                      onChange={(e) => handleProviderChange('tilt', e.target.value)}
+                      disabled={saving}
+                    >
+                      <MenuItem value="MotorSimulator">Motor Simulator</MenuItem>
+                      <MenuItem value="ActuatorController">Actuator Controller</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    size="small"
+                    label="Allowed capabilities"
+                    value={(config.allowedCapabilities || []).join(', ')}
+                    onChange={(e) => handleAllowedCapabilitiesChange(e.target.value)}
+                    disabled={saving}
+                    helperText="Comma-separated. A title that lists a capability not in this list is refused."
+                    sx={{ gridColumn: '1 / -1' }}
+                  />
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+          )}
           {settingsSections.map(({ key, title, icon }) => {
             const sectionData = config?.[key]
             if (!sectionData) return null
@@ -643,7 +791,9 @@ function ConfigurationTab({ treadmillState = null }) {
       {activeTab === 1 && (
         <Box>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Services are listed in startup order. Toggle services on/off and expand to configure properties.
+            {config?.composed
+              ? 'Resolved from the machine profile: Core runs at boot, Session starts when a title requires it, Not on this machine is skipped. Change providers on the Bandit Arena tab.'
+              : 'Services are listed in startup order. Toggle services on/off and expand to configure properties.'}
           </Typography>
           
           {sortedServices.map((service) => {
@@ -670,6 +820,7 @@ function ConfigurationTab({ treadmillState = null }) {
                 index={originalIndex}
                 onUpdate={handleServiceUpdate}
                 disabled={saving}
+                resolvedView={Boolean(config?.composed)}
               />
             )
           })}
@@ -688,6 +839,7 @@ function ConfigurationTab({ treadmillState = null }) {
         <DialogContent>
           <DialogContentText>
             <strong>Warning:</strong> Configuration changes require a full restart of Bandit Arena to take effect.
+            {config?.composed ? ' This save updates the machine profile, not the service catalog.' : ''}
           </DialogContentText>
           <DialogContentText sx={{ mt: 2 }}>
             The current configuration will be backed up before saving. Are you sure you want to save these changes?

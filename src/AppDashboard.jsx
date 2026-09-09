@@ -66,6 +66,7 @@ import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
 import ReservationsPage from './pages/cloud/ReservationsPage'
 import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
+import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
 
 import { useAuth } from './auth/useAuth'
 import { filterMenuGroups } from './auth/rolePermissions'
@@ -112,6 +113,7 @@ const IMPLEMENTED_PANELS = {
   usage: () => <UsagePage />,
   fleet: () => <FleetPage />,
   sessions: () => <SessionHistoryPage />,
+  'service-logs': () => <ServiceLogsPage />,
 }
 
 const MENU_ICONS = {
@@ -144,6 +146,7 @@ const MENU_ICONS = {
   roles: <AdminPanelSettingsIcon />,
   integrations: <ApiIcon />,
   branding: <PaletteIcon />,
+  'service-logs': <ReportProblemIcon />,
   audit: <FactCheckIcon />,
 }
 

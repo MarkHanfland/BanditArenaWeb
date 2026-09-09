@@ -9,8 +9,20 @@ test('session history lists sessions and opens detail export', async ({ page }) 
 
   await openMenuItem(page, 'operations', 'menu-sessions');
   await expect(page.getByRole('heading', { name: 'Session History' })).toBeVisible();
-  await page.getByTestId('session-history-user-filter').click();
+
+  const listRequest = page.waitForRequest((request) => {
+    if (request.method() !== 'GET') return false;
+    const url = new URL(request.url());
+    const path = url.pathname.replace(/\/$/, '');
+    return (
+      path.endsWith('/sessions') &&
+      !path.includes('/users/') &&
+      url.searchParams.get('userId') === 'user-demo-001'
+    );
+  });
+  await page.getByLabel('Player account').click();
   await page.getByRole('option', { name: 'Alex Runner' }).click();
+  await listRequest;
   await expect(page.getByTestId('session-history-table')).toBeVisible();
   await expect(page.getByText('session-demo-001')).toBeVisible();
   await expect(page.getByText('Lab Bay 1').first()).toBeVisible();

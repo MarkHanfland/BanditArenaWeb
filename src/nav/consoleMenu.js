@@ -55,6 +55,7 @@ export const MENU_LEAF_CATALOG = [
   { id: 'roles', groupId: MENU_GROUP.ADMINISTRATION, label: 'Roles & Permissions', implemented: false, phase: 'Beta 2' },
   { id: 'integrations', groupId: MENU_GROUP.ADMINISTRATION, label: 'Integrations (API, Webhooks)', implemented: false, phase: 'Beta 2' },
   { id: 'branding', groupId: MENU_GROUP.ADMINISTRATION, label: 'Branding & Customization', implemented: false, phase: 'Beta 2' },
+  { id: 'service-logs', groupId: MENU_GROUP.ADMINISTRATION, label: 'Service Logs', implemented: true, phase: 'Alpha' },
   { id: 'audit', groupId: MENU_GROUP.ADMINISTRATION, label: 'Audit Logs', implemented: false, phase: 'Beta 2' },
 ]
 

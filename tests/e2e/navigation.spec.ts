@@ -71,5 +71,6 @@ test('menu pillars are collapsible; only Local Device starts expanded', async ({
   await expect(page.getByTestId('menu-sessions')).toBeEnabled();
   await expect(page.getByTestId('menu-sessions')).toHaveAttribute('data-implemented', 'true');
   await expect(page.getByTestId('menu-group-administration')).toBeVisible();
+  await expect(page.getByTestId('menu-service-logs')).toHaveCount(0);
   await expect(page.getByTestId('menu-audit')).toBeDisabled();
 });

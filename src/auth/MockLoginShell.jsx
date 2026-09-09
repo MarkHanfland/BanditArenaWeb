@@ -15,12 +15,16 @@ import {
   ROLE_OPERATOR,
   ROLE_TECHNICIAN,
   ROLE_VENUE_ADMIN,
+  ROLE_FLEET_ADMIN,
+  ROLE_CLOUD_ADMIN,
 } from './rolePermissions'
 
 const GROUP_BY_ROLE = {
   [ROLE_OPERATOR]: 'bandit-operator',
   [ROLE_TECHNICIAN]: 'bandit-technician',
   [ROLE_VENUE_ADMIN]: 'bandit-venue-admin',
+  [ROLE_FLEET_ADMIN]: 'bandit-fleet-admin',
+  [ROLE_CLOUD_ADMIN]: 'bandit-cloud-admin',
 }
 
 export default function MockLoginShell() {
@@ -100,6 +104,8 @@ export default function MockLoginShell() {
             <MenuItem value={ROLE_OPERATOR}>Operator</MenuItem>
             <MenuItem value={ROLE_TECHNICIAN}>Technician</MenuItem>
             <MenuItem value={ROLE_VENUE_ADMIN}>Venue Admin</MenuItem>
+            <MenuItem value={ROLE_FLEET_ADMIN}>Fleet Admin</MenuItem>
+            <MenuItem value={ROLE_CLOUD_ADMIN}>Cloud Admin</MenuItem>
           </TextField>
           <Button
             variant="contained"

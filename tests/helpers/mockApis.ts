@@ -204,6 +204,8 @@ export function createCloudFixture() {
     alerts,
     notifications,
     sessions,
+    opsLogs: [] as Array<Record<string, unknown>>,
+    opsIncidents: [] as Array<Record<string, unknown>>,
   };
 }
 
@@ -345,6 +347,48 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       const user = fixture.users.find((u) => u.userId === userDetail[1]) || fixture.users[0];
       return json({ user, message: 'User detail' });
     }
+    if (/^\/users\/([^/]+)\/safety-profile$/.test(path) && method === 'GET') {
+      const userId = path.split('/')[2];
+      const user = fixture.users.find((u) => u.userId === userId) || fixture.users[0];
+      return json({
+        message: 'Safety profile',
+        safetyProfile: user.safetyProfile || null,
+      });
+    }
+    if (path === '/sessions' && method === 'GET') {
+      const userId = url.searchParams.get('userId');
+      const venueId = url.searchParams.get('venueId');
+      const instanceId = url.searchParams.get('instanceId');
+      let sessions = fixture.sessions || [];
+      if (userId) sessions = sessions.filter((s) => s.userId === userId);
+      if (venueId) sessions = sessions.filter((s) => s.venueId === venueId);
+      if (instanceId) sessions = sessions.filter((s) => s.instanceId === instanceId);
+      return json({ message: 'Sessions', sessions, count: sessions.length, cursor: null });
+    }
+    if (path === '/ops/logs' && method === 'GET') {
+      return json({
+        message: 'Operational logs',
+        entries: fixture.opsLogs || [],
+      });
+    }
+    if (path === '/ops/incidents' && method === 'GET') {
+      return json({
+        message: 'Platform incidents',
+        incidents: fixture.opsIncidents || [],
+      });
+    }
+    {
+      const ackMatch = path.match(/^\/ops\/incidents\/([^/]+)\/ack$/);
+      if (ackMatch && method === 'POST') {
+        const incidentId = ackMatch[1];
+        const incident = (fixture.opsIncidents || []).find((item) => item.incidentId === incidentId) || {
+          incidentId,
+          status: 'acknowledged',
+        };
+        incident.status = 'acknowledged';
+        return json({ message: 'Incident acknowledged', incident });
+      }
+    }
     if (/^\/users\/([^/]+)\/sessions$/.test(path) && method === 'GET') {
       const userId = path.split('/')[2];
       const sessions = (fixture.sessions || []).filter((s) => s.userId === userId);
@@ -450,6 +494,30 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path === '/media' && method === 'GET') {
       return json({ media: fixture.media });
+    }
+    if (path === '/media/royalties' && method === 'GET') {
+      const url = new URL(route.request().url());
+      const from = url.searchParams.get('from');
+      const to = url.searchParams.get('to');
+      const period = url.searchParams.get('period') || (from || to ? 'custom' : 'all');
+      const rows = fixture.media.map((item, index) => {
+        const minutes = item.mediaId === 'm1' ? 25 : index === 0 ? 25 : 0;
+        const pricePerMinute = item.pricePerMinute ?? 0.15;
+        return {
+          mediaId: item.mediaId,
+          name: item.name,
+          minutes,
+          pricePerMinute,
+          revenue: Math.round(minutes * pricePerMinute * 100) / 100,
+        };
+      });
+      return json({
+        message: 'Royalty report',
+        period,
+        from: from || null,
+        to: to || null,
+        rows,
+      });
     }
     if (path === '/media' && method === 'POST') {
       const body = route.request().postDataJSON();
@@ -854,9 +922,38 @@ export async function mockDeviceApi(page, options: {
       return deviceJson(route, { ok: true });
     }
     return deviceJson(route, {
+      composed: true,
+      profile: 'lab-sim',
+      providers: {
+        skeleton: 'CameraSimulator',
+        motors: 'MotorSimulator',
+        tilt: 'MotorSimulator',
+      },
+      allowedCapabilities: ['simulation', 'prop.sword'],
+      machine: { name: 'Lab Bench', version: '1.0.35' },
+      logging: { log_level: 'info' },
       tread: { diameter_meters: 3, safety_wall_thickness_meters: 0.5 },
       openxr_runtime: { name: 'SteamVR' },
-      services: [],
+      services: [
+        {
+          name: 'CameraSimulator',
+          enabled: true,
+          lifecycle: 'session',
+          startupSequence: 1,
+          description: 'Simulated skeleton',
+          executablePath: './CameraSimulator.exe',
+          properties: {},
+        },
+        {
+          name: 'UserController',
+          enabled: true,
+          lifecycle: 'core',
+          startupSequence: 2,
+          description: 'User state',
+          executablePath: './UserController.exe',
+          properties: {},
+        },
+      ],
     });
   });
 
@@ -909,6 +1006,8 @@ export async function mockDeviceApi(page, options: {
           secondsSinceLastHeartbeat: 1,
           running: true,
           failed: false,
+          registered: false,
+          lifecycle: 'core',
           restartCount: 0,
           description: 'OpenXR',
           startupSequence: 1,

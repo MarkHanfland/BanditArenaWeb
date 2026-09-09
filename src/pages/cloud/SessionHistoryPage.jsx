@@ -25,7 +25,7 @@ import {
   getSessionMetrics,
   getSessionSafetyEvents,
   listProductInstances,
-  listUserSessions,
+  listSessions,
   listUsers,
   listVenues,
 } from '../../api/cloud'
@@ -216,7 +216,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
       return
     }
 
-    const sessionsRes = await listUserSessions(user.userId)
+    const sessionsRes = await listSessions({ userId: user.userId, limit: 200 })
     if (sessionsRes.error) {
       setError(sessionsRes.error)
       setRows([])

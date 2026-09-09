@@ -18,6 +18,13 @@ import {
   MenuItem,
   Stack,
   Switch,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material'
@@ -27,6 +34,7 @@ import {
   createMediaAssetUploadToken,
   createContentUploadToken,
   deleteMedia,
+  getRoyaltyReport,
   listMedia,
   publishMedia,
   republishMedia,
@@ -34,6 +42,19 @@ import {
   updateMedia,
 } from '../../api/cloud'
 import { usePlayerSession } from '../../session/PlayerSessionContext'
+
+function usd(n) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n || 0)
+}
+
+function isoDateUtc(d) {
+  return d.toISOString().slice(0, 10)
+}
 
 const emptyDraft = {
   name: '',
@@ -138,6 +159,12 @@ export default function MediaPage() {
   const imageInputRef = useRef(null)
   const videoInputRef = useRef(null)
   const packageInputRef = useRef(null)
+  const [tab, setTab] = useState('catalog')
+  const [royalties, setRoyalties] = useState(null)
+  const [royaltyLoading, setRoyaltyLoading] = useState(false)
+  const [royaltyError, setRoyaltyError] = useState('')
+  const [royaltyFrom, setRoyaltyFrom] = useState('')
+  const [royaltyTo, setRoyaltyTo] = useState('')
 
   const loadCatalog = useCallback(async () => {
     setLoading(true)
@@ -151,9 +178,33 @@ export default function MediaPage() {
     setLoading(false)
   }, [])
 
+  const loadRoyalties = useCallback(async (query = {}) => {
+    setRoyaltyLoading(true)
+    const period = query.from || query.to ? 'custom' : 'all'
+    const { data, error: apiError } = await getRoyaltyReport({ ...query, period })
+    if (apiError) {
+      setRoyaltyError(apiError)
+      setRoyalties(null)
+    } else {
+      setRoyalties(data)
+      setRoyaltyError('')
+    }
+    setRoyaltyLoading(false)
+  }, [])
+
   useEffect(() => {
     loadCatalog()
   }, [loadCatalog])
+
+  useEffect(() => {
+    if (tab === 'royalties') {
+      loadRoyalties(
+        royaltyFrom || royaltyTo ? { from: royaltyFrom, to: royaltyTo } : {},
+      )
+    }
+    // Load once when opening the tab; Apply / All / 30d refetch explicitly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab])
 
   const openCreate = () => {
     setEditingId(null)
@@ -193,6 +244,7 @@ export default function MediaPage() {
     objectKey: draft.objectKey || undefined,
     pricePerMinute: draft.pricePerMinute,
     testMedia: draft.testMedia,
+    capabilities: draft.testMedia ? ['simulation'] : draft.capabilities || [],
     simulationMode: draft.testMedia ? draft.simulationMode : undefined,
     deterministicConfig:
       draft.testMedia && draft.simulationMode === 'deterministic'
@@ -369,16 +421,24 @@ export default function MediaPage() {
     <PageScaffold
       title="Media"
       category="Cloud"
-      description="VR media catalog — create, edit, publish, upload cover/demo assets, and content packages."
+      description="VR catalog and play-time royalty by title (SVC-008)."
     >
-      {loading && <CircularProgress size={24} />}
-      {error && <Alert severity="error">{error}</Alert>}
+      {loading && tab === 'catalog' && <CircularProgress size={24} />}
+      {error && tab === 'catalog' && <Alert severity="error">{error}</Alert>}
       {message && (
         <Alert severity={messageSeverity} sx={{ mb: 2 }} onClose={() => setMessage('')}>
           {message}
         </Alert>
       )}
-      {!loading && !error && (
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        sx={{ mb: 2 }}
+      >
+        <Tab label="Catalog" value="catalog" data-testid="media-tab-catalog" />
+        <Tab label="Royalties" value="royalties" data-testid="media-tab-royalties" />
+      </Tabs>
+      {!loading && !error && tab === 'catalog' && (
         <Stack spacing={2}>
           <Button variant="contained" onClick={openCreate} data-testid="create-media">
             Create media
@@ -476,6 +536,105 @@ export default function MediaPage() {
               )
             })}
           </Grid>
+        </Stack>
+      )}
+
+      {tab === 'royalties' && (
+        <Stack spacing={2} data-testid="media-royalties">
+          <Typography variant="h6">Play-time royalty by title</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Minutes × price per minute from session play-time. Commerce Revenue is a different ledger.
+          </Typography>
+          <Stack direction="row" flexWrap="wrap" gap={1.5} alignItems="center">
+            <TextField
+              label="From"
+              type="date"
+              size="small"
+              value={royaltyFrom}
+              onChange={(e) => setRoyaltyFrom(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              data-testid="media-royalties-from"
+            />
+            <TextField
+              label="To"
+              type="date"
+              size="small"
+              value={royaltyTo}
+              onChange={(e) => setRoyaltyTo(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              data-testid="media-royalties-to"
+            />
+            <Button
+              variant="contained"
+              size="small"
+              disabled={royaltyLoading}
+              onClick={() => loadRoyalties({ from: royaltyFrom, to: royaltyTo })}
+              data-testid="media-royalties-apply"
+            >
+              Apply
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={royaltyLoading}
+              onClick={() => {
+                setRoyaltyFrom('')
+                setRoyaltyTo('')
+                loadRoyalties({})
+              }}
+              data-testid="media-royalties-all"
+            >
+              All
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={royaltyLoading}
+              onClick={() => {
+                const to = isoDateUtc(new Date())
+                const from = isoDateUtc(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000))
+                setRoyaltyFrom(from)
+                setRoyaltyTo(to)
+                loadRoyalties({ from, to })
+              }}
+              data-testid="media-royalties-30d"
+            >
+              Last 30 days
+            </Button>
+          </Stack>
+          {royaltyLoading && <CircularProgress size={24} />}
+          {royaltyError && <Alert severity="error">{royaltyError}</Alert>}
+          {!royaltyLoading && royalties && (
+            <>
+              <Table size="small" data-testid="media-royalties-table">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Title</TableCell>
+                    <TableCell>Media ID</TableCell>
+                    <TableCell align="right">Minutes</TableCell>
+                    <TableCell align="right">$/min</TableCell>
+                    <TableCell align="right">Revenue</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(royalties.rows || []).map((row) => (
+                    <TableRow key={row.mediaId}>
+                      <TableCell>{row.name}</TableCell>
+                      <TableCell>{row.mediaId}</TableCell>
+                      <TableCell align="right">{row.minutes}</TableCell>
+                      <TableCell align="right">{usd(row.pricePerMinute)}</TableCell>
+                      <TableCell align="right">{usd(row.revenue)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Typography variant="subtitle1" data-testid="media-royalties-total">
+                Total · {(royalties.rows || []).reduce((sum, r) => sum + (r.minutes || 0), 0)} min ·{' '}
+                {usd((royalties.rows || []).reduce((sum, r) => sum + (r.revenue || 0), 0))}
+                {royalties.period ? ` · ${royalties.period}` : ''}
+              </Typography>
+            </>
+          )}
         </Stack>
       )}
 

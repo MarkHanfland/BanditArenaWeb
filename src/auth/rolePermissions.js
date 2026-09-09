@@ -32,7 +32,7 @@ const VENUE_CLOUD = leafIdsInGroups(
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'treadmill', 'events'],
   [ROLE_TECHNICIAN]: [...DEVICE_MENU_IDS, ...TECHNICIAN_CLOUD],
-  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
+  [ROLE_VENUE_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD].filter((id) => id !== 'service-logs'),
   [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
   [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...VENUE_CLOUD],
 }

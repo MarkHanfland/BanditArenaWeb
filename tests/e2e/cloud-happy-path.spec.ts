@@ -51,8 +51,7 @@ test('enrollment suspend blocks a later cloud session start', async ({ page }) =
   await openMenuItem(page, 'operations', 'menu-users');
   await page.getByTestId('suspend-user-demo-001').click();
   await expect(page.getByTestId('enrollment-message')).toContainText('Alex Runner is now suspended');
-  await page.getByTestId('start-session-user-demo-001').click();
-  await expect(page.getByTestId('enrollment-message')).toContainText('Session blocked: enrollment not active');
+  await expect(page.getByTestId('start-session-user-demo-001')).toBeDisabled();
 });
 
 test('session start on the device console starts the local session for an active user', async ({ page }) => {
@@ -69,14 +68,25 @@ test('session start on the device console starts the local session for an active
   await expect(page.getByTestId('header-player-select')).toHaveValue(/Alex Runner/);
 });
 
+test('SW-090: enrollment details shows safety profile when exposed', async ({ page }) => {
+  await mockCloudApi(page);
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'operations', 'menu-users');
+  await expect(page.getByText('Alex Runner')).toBeVisible();
+  await page.getByRole('row', { name: /Alex Runner/ }).getByRole('button', { name: 'Details' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByText(/Safety:\s*178 cm,\s*72 kg/)).toBeVisible();
+  await expect(page.getByText(/Enrollment:\s*active/)).toBeVisible();
+});
+
 test('session start is blocked by the license gate for a non-active user', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
   await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByText('Jordan Pending')).toBeVisible();
-  await page.getByTestId('start-session-user-demo-002').click();
-  await expect(page.getByText('Session blocked: enrollment not active')).toBeVisible();
+  await expect(page.getByTestId('start-session-user-demo-002')).toBeDisabled();
 });
 
 test('content publish flow adds a VR title', async ({ page }) => {
@@ -90,6 +100,17 @@ test('content publish flow adds a VR title', async ({ page }) => {
   await page.getByLabel('Description').fill('A demo VR trail');
   await page.getByRole('button', { name: 'Create' }).click();
   await expect(page.getByText(/Created Desert Dash|Desert Dash/)).toBeVisible();
+});
+
+test('media royalties tab shows play-time report', async ({ page }) => {
+  await mockCloudApi(page);
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'content', 'menu-media');
+  await page.getByTestId('media-tab-royalties').click();
+  await expect(page.getByTestId('media-royalties-table')).toBeVisible();
+  await expect(page.getByText('Alpine Trail')).toBeVisible();
+  await expect(page.getByTestId('media-royalties-total')).toContainText('$2.50');
 });
 
 test('SW-089: media cover upload uses asset-upload-token and objectKey PATCH only', async ({

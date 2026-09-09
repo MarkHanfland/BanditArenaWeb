@@ -261,16 +261,24 @@ function ServicesTab() {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Chip
-                        label={service.failed ? 'Failed' : (service.running ? 'Running' : 'Stopped')}
-                        color={(service.failed || !service.running) ? 'error' : 'success'}
+                        label={
+                          service.registered
+                            ? 'Registered'
+                            : (service.failed ? 'Failed' : (service.running ? 'Running' : 'Stopped'))
+                        }
+                        color={
+                          service.registered
+                            ? 'default'
+                            : ((service.failed || !service.running) ? 'error' : 'success')
+                        }
                         size="small"
                       />
-                      {service.enabled && (
+                      {service.lifecycle && (
                         <Chip
-                          label="Enabled"
-                          color="info"
+                          label={service.lifecycle === 'session' ? 'Session' : 'Core'}
+                          color={service.lifecycle === 'session' ? 'warning' : 'info'}
                           size="small"
                         />
                       )}
@@ -282,8 +290,16 @@ function ServicesTab() {
                   </TableCell>
                   <TableCell align="right">
                     <Chip
-                      label={`${service.secondsSinceLastHeartbeat}s ago`}
-                      color={getHealthColor(service.secondsSinceLastHeartbeat, service.failed)}
+                      label={
+                        service.registered
+                          ? 'Idle'
+                          : `${service.secondsSinceLastHeartbeat}s ago`
+                      }
+                      color={
+                        service.registered
+                          ? 'default'
+                          : getHealthColor(service.secondsSinceLastHeartbeat, service.failed)
+                      }
                       size="small"
                     />
                   </TableCell>

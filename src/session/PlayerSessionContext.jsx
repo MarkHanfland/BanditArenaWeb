@@ -213,6 +213,9 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       testMedia: isTestMedia,
       simulationMode: media?.simulationMode || (isTestMedia ? 'deterministic' : ''),
       deterministicConfig: media?.deterministicConfig || '',
+      capabilities: Array.isArray(media?.capabilities)
+        ? media.capabilities
+        : (isTestMedia ? ['simulation'] : []),
     })
     if (error) {
       setMessage(error)

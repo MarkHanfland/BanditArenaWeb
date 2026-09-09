@@ -231,6 +231,24 @@ export async function createContentUploadToken(mediaId, payload = {}) {
 
 
 
+export async function getRoyaltyReport(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.from) params.set('from', query.from)
+
+  if (query.to) params.set('to', query.to)
+
+  if (query.period) params.set('period', query.period)
+
+  const qs = params.toString()
+
+  return request(() => cloudApi.get(`/media/royalties${qs ? `?${qs}` : ''}`))
+
+}
+
+
+
 export async function listProducts() {
 
   return request(() => cloudApi.get('/products'))
@@ -353,6 +371,35 @@ export async function getSessionTimeline(sessionId) {
 
 export async function exportSession(sessionId, format = 'json') {
   return request(() => cloudApi.get(`/sessions/${sessionId}/export`, { params: { format } }))
+}
+
+export async function listSessions(params = {}) {
+  const qs = new URLSearchParams()
+  for (const key of ['userId', 'venueId', 'instanceId', 'from', 'to', 'limit', 'cursor']) {
+    if (params[key] != null && params[key] !== '') qs.set(key, String(params[key]))
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request(() => cloudApi.get(`/sessions${suffix}`))
+}
+
+export async function listOperationalLogs(params = {}) {
+  const qs = new URLSearchParams()
+  for (const key of ['severity', 'from', 'to', 'route', 'q', 'operatorId']) {
+    if (params[key] != null && params[key] !== '') qs.set(key, String(params[key]))
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request(() => cloudApi.get(`/ops/logs${suffix}`))
+}
+
+export async function listPlatformIncidents(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.status) qs.set('status', params.status)
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request(() => cloudApi.get(`/ops/incidents${suffix}`))
+}
+
+export async function acknowledgePlatformIncident(incidentId, payload = {}) {
+  return request(() => cloudApi.post(`/ops/incidents/${incidentId}/ack`, payload))
 }
 
 export async function checkUpdates(params) {
