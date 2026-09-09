@@ -248,6 +248,8 @@ test('analytics page shows summary cards', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
   await expect(page.getByText('Sessions (7d)')).toBeVisible();
   await expect(page.getByTestId('analytics-sessions')).toHaveText('5');
+  await expect(page.getByTestId('analytics-utilization')).toHaveText('12%');
+  await expect(page.getByTestId('analytics-fleet-live')).toBeVisible();
   await expect(page.getByTestId('analytics-trend')).toBeVisible();
   await expect(page.getByText('1 → 2 → 3')).toBeVisible();
 });

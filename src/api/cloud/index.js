@@ -78,6 +78,7 @@ export {
   acknowledgeAlert,
   listAlertRules,
   getAnalyticsSummary,
+  getFleetAnalytics,
   listSupportTickets,
   createSupportTicket,
   listDiagnosticCommands,

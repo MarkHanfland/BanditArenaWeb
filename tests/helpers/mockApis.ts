@@ -453,10 +453,43 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path === '/analytics/summary') {
       return json({
         sessionsCompleted: 5,
+        sessionCount: 5,
+        averageDurationSeconds: 120,
+        utilizationRate: 0.12,
+        playerCount: 2,
         activeDevices: 1,
         enrolledUsers: fixture.users.filter((u) => u.enrollmentState === 'active').length,
         weeklySessionTrend: [1, 2, 3],
         alerts: fixture.alerts.filter((a) => a.status === 'open'),
+      });
+    }
+    if (path === '/analytics/fleet') {
+      return json({
+        message: 'Fleet analytics',
+        sessionCount: 5,
+        utilizationRate: 0.12,
+        durationSeconds: 600,
+        deviceCounts: { total: 2, online: 1, offline: 0, provisioned: 1, active: 0, decommissioned: 0 },
+        openAlertCount: 1,
+        venues: [
+          {
+            venueId: 'venue-demo-001',
+            venueName: 'Demo Venue',
+            deviceCount: 2,
+            onlineCount: 1,
+            sessionCount: 5,
+            durationSeconds: 600,
+          },
+        ],
+        devices: [
+          {
+            instanceId: 'instance-demo-001',
+            displayName: 'Tread 1',
+            status: 'online',
+            sessionCount: 5,
+            durationSeconds: 600,
+          },
+        ],
       });
     }
     if (path === '/alert-rules' && method === 'GET') {

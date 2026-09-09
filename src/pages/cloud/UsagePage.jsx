@@ -12,6 +12,7 @@ import PageScaffold from '../../components/shared/PageScaffold'
 import {
   acknowledgeAlert,
   getAnalyticsSummary,
+  getFleetAnalytics,
   listAlerts,
   listNotifications,
   sendNotification,
@@ -135,6 +136,7 @@ export default function UsagePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
+  const [fleet, setFleet] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [notifications, setNotifications] = useState([])
   const [actionMessage, setActionMessage] = useState('')
@@ -154,10 +156,11 @@ export default function UsagePage() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
-      const { data, error: apiError } = await getAnalyticsSummary()
+      const [summaryRes, fleetRes] = await Promise.all([getAnalyticsSummary(), getFleetAnalytics()])
       if (!mounted) return
-      if (apiError) setError(apiError)
-      else setSummary(data)
+      if (summaryRes.error) setError(summaryRes.error)
+      else setSummary(summaryRes.data)
+      if (!fleetRes.error) setFleet(fleetRes.data)
       await refreshAlertsAndHistory()
       if (mounted) setLoading(false)
     })()
@@ -228,6 +231,24 @@ export default function UsagePage() {
               value={summary?.sessionsCompleted ?? '—'}
               sub="analytics-sessions"
             />
+            <HeroMetric
+              label="Utilization"
+              value={
+                summary?.utilizationRate == null
+                  ? '—'
+                  : `${Math.round(Number(summary.utilizationRate) * 100)}%`
+              }
+              sub="analytics-utilization"
+            />
+            <HeroMetric
+              label="Avg duration"
+              value={
+                summary?.averageDurationSeconds == null
+                  ? '—'
+                  : `${Math.round(Number(summary.averageDurationSeconds))}s`
+              }
+              sub="analytics-avg-duration"
+            />
             <HeroMetric label="Active devices" value={summary?.activeDevices ?? '—'} />
             <HeroMetric label="Enrolled users" value={summary?.enrolledUsers ?? '—'} />
             <HeroMetric label="Fleet revenue 30d" value={usd(totalRevenue)} sub="analytics-fleet-revenue" />
@@ -257,6 +278,33 @@ export default function UsagePage() {
               {(summary?.weeklySessionTrend || []).join(' → ')}
             </Typography>
           </Box>
+
+          {fleet ? (
+            <Box data-testid="analytics-fleet-live">
+              <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1.5 }}>
+                Fleet utilization
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                {fleet.sessionCount ?? 0} sessions ·{' '}
+                {Math.round(Number(fleet.utilizationRate || 0) * 100)}% utilization ·{' '}
+                {fleet.deviceCounts?.online ?? 0}/{fleet.deviceCounts?.total ?? 0} devices online
+                {fleet.openAlertCount ? ` · ${fleet.openAlertCount} open alerts` : ''}
+              </Typography>
+              <Stack spacing={1} data-testid="analytics-fleet-venues">
+                {(fleet.venues || []).map((venue) => (
+                  <Typography
+                    key={venue.venueId}
+                    variant="body2"
+                    sx={{ color: 'rgba(255,255,255,0.8)' }}
+                    data-testid={`analytics-fleet-venue-${venue.venueId}`}
+                  >
+                    {(venue.venueName || venue.venueId) +
+                      ` · ${venue.sessionCount || 0} sessions · ${venue.onlineCount || 0}/${venue.deviceCount || 0} online`}
+                  </Typography>
+                ))}
+              </Stack>
+            </Box>
+          ) : null}
 
           <Box>
             <Typography variant="h6" sx={{ color: '#fff', fontWeight: 700, mb: 1.5 }}>

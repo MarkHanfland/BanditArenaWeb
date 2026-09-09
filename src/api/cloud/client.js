@@ -570,9 +570,17 @@ export async function listAlertRules() {
 
 
 
-export async function getAnalyticsSummary() {
+export async function getAnalyticsSummary(params = {}) {
 
-  return request(() => cloudApi.get('/analytics/summary'))
+  return request(() => cloudApi.get('/analytics/summary', { params }))
+
+}
+
+
+
+export async function getFleetAnalytics(params = {}) {
+
+  return request(() => cloudApi.get('/analytics/fleet', { params }))
 
 }
 
