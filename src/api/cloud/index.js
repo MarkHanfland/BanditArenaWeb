@@ -92,5 +92,11 @@ export {
   getCommerceQuote,
   createCommerceQuote,
   getRevenueReport,
+  listBillingCycles,
+  createBillingCycle,
+  listBillingInvoices,
+  generateBillingInvoice,
+  reconcileBillingCycle,
+  estimateBillingTax,
   listCatalogModels,
 } from './client'

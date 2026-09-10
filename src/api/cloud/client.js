@@ -818,6 +818,30 @@ export async function getRevenueReport(query = {}) {
 
 }
 
+export async function listBillingCycles() {
+  return request(() => cloudApi.get('/billing/cycles'))
+}
+
+export async function createBillingCycle(payload) {
+  return request(() => cloudApi.post('/billing/cycles', payload))
+}
+
+export async function listBillingInvoices() {
+  return request(() => cloudApi.get('/billing/invoices'))
+}
+
+export async function generateBillingInvoice(cycleId) {
+  return request(() => cloudApi.post(`/billing/cycles/${cycleId}/invoice`))
+}
+
+export async function reconcileBillingCycle(cycleId, payload) {
+  return request(() => cloudApi.post(`/billing/cycles/${cycleId}/reconcile`, payload))
+}
+
+export async function estimateBillingTax(payload) {
+  return request(() => cloudApi.post('/billing/tax-estimate', payload))
+}
+
 
 
 export async function listCatalogModels() {

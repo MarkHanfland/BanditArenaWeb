@@ -28,6 +28,10 @@ import {
   createCommerceQuote,
   getModelInventoryPreset,
   getRevenueReport,
+  listBillingCycles,
+  createBillingCycle,
+  generateBillingInvoice,
+  reconcileBillingCycle,
   issueLicense,
   listCatalogModels,
   listCommerceOfferings,
@@ -74,6 +78,7 @@ export default function BillingPage() {
   const [preset, setPreset] = useState([])
   const [selectedModel, setSelectedModel] = useState('bandit-arena-core')
   const [revenue, setRevenue] = useState(null)
+  const [cycles, setCycles] = useState([])
   const [licenses, setLicenses] = useState([])
   const [plans, setPlans] = useState([])
   const [instances, setInstances] = useState([])
@@ -97,6 +102,7 @@ export default function BillingPage() {
       quotesRes,
       modelsRes,
       revenueRes,
+      cyclesRes,
       licensesRes,
       plansRes,
       instancesRes,
@@ -106,6 +112,7 @@ export default function BillingPage() {
       listCommerceQuotes(),
       listCatalogModels(),
       getRevenueReport(),
+      listBillingCycles(),
       listLicenses(),
       listLicensePlans(),
       listProductInstances(),
@@ -116,6 +123,7 @@ export default function BillingPage() {
     setQuotes(quotesRes.data?.quotes || [])
     setModels(modelsRes.data?.products || [])
     setRevenue(revenueRes.data || null)
+    setCycles(cyclesRes.data?.cycles || [])
     setLicenses(licensesRes.data?.licenses || [])
     setPlans(plansRes.data?.plans || [])
     setInstances(instancesRes.data?.instances || [])
@@ -213,11 +221,52 @@ export default function BillingPage() {
     await loadAll()
   }
 
+  const handleCloseCycle = async () => {
+    setMessage('')
+    const now = new Date()
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+    const { data, error: apiError } = await createBillingCycle({
+      periodStart: start,
+      periodEnd: now.toISOString(),
+      jurisdiction: 'US-IL',
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Cycle ${data?.cycle?.cycleId} · ${usd(data?.cycle?.amountDueUsd)} due`)
+    await loadAll()
+  }
+
+  const handleInvoice = async (cycleId) => {
+    setMessage('')
+    const { data, error: apiError } = await generateBillingInvoice(cycleId)
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Invoice ${data?.invoice?.invoiceId} · ${usd(data?.invoice?.totalUsd)}`)
+    await loadAll()
+  }
+
+  const handleReconcile = async (cycleId) => {
+    setMessage('')
+    const { data, error: apiError } = await reconcileBillingCycle(cycleId, {
+      transactionId: `txn-${Date.now()}`,
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Reconciled ${data?.cycle?.cycleId}`)
+    await loadAll()
+  }
+
   return (
     <PageScaffold
       title="Commerce"
       category="Cloud"
-      description="Offerings, enterprise quotes (no payment), Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
+      description="Offerings, enterprise quotes (no payment), billing cycles, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
@@ -238,6 +287,7 @@ export default function BillingPage() {
         <Tab label="Quotes" value="quotes" data-testid="commerce-tab-quotes" />
         <Tab label="Models & BOM" value="models" data-testid="commerce-tab-models" />
         <Tab label="Licensing" value="licensing" data-testid="commerce-tab-licensing" />
+        <Tab label="Cycles" value="cycles" data-testid="commerce-tab-cycles" />
         <Tab label="Revenue" value="revenue" data-testid="commerce-tab-revenue" />
       </Tabs>
 
@@ -446,6 +496,73 @@ export default function BillingPage() {
                           data-testid={`revoke-${license.licenseId}`}
                         >
                           Revoke
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Stack>
+      )}
+
+      {!loading && tab === 'cycles' && (
+        <Stack spacing={2} data-testid="commerce-cycles">
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" data-testid="commerce-close-cycle" onClick={handleCloseCycle}>
+              Close current cycle
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Cycles roll up paid Bandit streams. Invoice download uses a placeholder URL until the
+            billing bucket is configured. Reconciliation records an external transaction — no
+            payment processor.
+          </Typography>
+          <Table size="small" data-testid="commerce-cycles-table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Cycle</TableCell>
+                <TableCell>Period</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Amount due</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {cycles.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography color="text.secondary">No billing cycles yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+              {cycles.map((cycle) => (
+                <TableRow key={cycle.cycleId}>
+                  <TableCell>{cycle.cycleId}</TableCell>
+                  <TableCell>
+                    {cycle.periodStart ? new Date(cycle.periodStart).toLocaleDateString() : '—'}
+                    {' – '}
+                    {cycle.periodEnd ? new Date(cycle.periodEnd).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell>{cycle.status}</TableCell>
+                  <TableCell align="right">{usd(cycle.amountDueUsd)}</TableCell>
+                  <TableCell align="right">
+                    {cycle.status !== 'reconciled' && (
+                      <>
+                        <Button
+                          size="small"
+                          onClick={() => handleInvoice(cycle.cycleId)}
+                          data-testid={`invoice-${cycle.cycleId}`}
+                        >
+                          Invoice
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => handleReconcile(cycle.cycleId)}
+                          data-testid={`reconcile-${cycle.cycleId}`}
+                        >
+                          Reconcile
                         </Button>
                       </>
                     )}

@@ -263,6 +263,22 @@ test('commerce multi-unit quote does not create an order', async ({ page }) => {
   expect(fixture.quotes[0].paymentTriggered).toBe(false);
 });
 
+test('billing close cycle and reconcile', async ({ page }) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'business', 'menu-billing');
+  await page.getByTestId('commerce-tab-cycles').click();
+  await page.getByTestId('commerce-close-cycle').click();
+  await expect(page.getByTestId('billing-message')).toContainText('Cycle cyc-');
+  await expect(page.getByTestId('commerce-cycles-table')).toContainText('cyc-');
+  const cycleId = fixture.cycles[0].cycleId as string;
+  await page.getByTestId(`reconcile-${cycleId}`).click();
+  await expect(page.getByTestId('billing-message')).toContainText('Reconciled');
+  expect(fixture.cycles[0].status).toBe('reconciled');
+});
+
 test('analytics page shows summary cards', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);

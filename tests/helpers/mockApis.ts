@@ -207,6 +207,7 @@ export function createCloudFixture() {
     diagCommands,
     orders,
     quotes,
+    cycles: [] as Array<Record<string, unknown>>,
     offerings,
     alerts,
     notifications,
@@ -985,6 +986,51 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       };
       fixture.orders = [...(fixture.orders || []), order];
       return json({ order, message: 'Order created' }, 201);
+    }
+    if (path === '/billing/cycles' && method === 'GET') {
+      return json({ cycles: fixture.cycles || [], message: 'Billing cycles' });
+    }
+    if (path === '/billing/cycles' && method === 'POST') {
+      const body = route.request().postDataJSON() || {};
+      const cycle = {
+        cycleId: `cyc-${Date.now()}`,
+        periodStart: body.periodStart,
+        periodEnd: body.periodEnd,
+        jurisdiction: body.jurisdiction || 'DEFAULT',
+        amountDueUsd: 63488,
+        status: 'open',
+        paymentStatus: 'due',
+      };
+      fixture.cycles = [...(fixture.cycles || []), cycle];
+      return json({ cycle, message: 'Billing cycle created' }, 201);
+    }
+    if (path.match(/^\/billing\/cycles\/[^/]+\/invoice$/) && method === 'POST') {
+      const cycleId = path.split('/')[3];
+      const invoice = {
+        invoiceId: `inv-${Date.now()}`,
+        cycleId,
+        totalUsd: 63488,
+        downloadUrl: `https://billing.local/invoices/inv-${Date.now()}.pdf`,
+        downloadMode: 'placeholder',
+      };
+      return json({ invoice, message: 'Invoice generated' }, 201);
+    }
+    if (path.match(/^\/billing\/cycles\/[^/]+\/reconcile$/) && method === 'POST') {
+      const cycleId = path.split('/')[3];
+      const body = route.request().postDataJSON() || {};
+      fixture.cycles = (fixture.cycles || []).map((cycle) =>
+        cycle.cycleId === cycleId
+          ? { ...cycle, status: 'reconciled', paymentStatus: 'reconciled', reconciledTransactionId: body.transactionId }
+          : cycle,
+      );
+      const cycle = (fixture.cycles || []).find((item) => item.cycleId === cycleId);
+      return json({ cycle, message: 'Billing cycle reconciled' });
+    }
+    if (path === '/billing/invoices' && method === 'GET') {
+      return json({ invoices: [], message: 'Billing invoices' });
+    }
+    if (path === '/billing/tax-estimate' && method === 'POST') {
+      return json({ taxRate: 0.0625, taxUsd: 0, message: 'Tax estimate' });
     }
     if (path === '/billing/revenue-report' && method === 'GET') {
       return json({
