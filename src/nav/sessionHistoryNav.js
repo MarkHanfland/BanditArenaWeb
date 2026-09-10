@@ -1,6 +1,7 @@
 /**
  * Cross-page navigation into Session History (no React Router).
- * Alpha: History is Player-scoped — remember last selected account for reopen.
+ * Remember last selected Player for Enrollment deep-link reopen. Beta History
+ * also accepts venue/treadmill scope without a Player.
  */
 
 const LAST_HISTORY_USER_KEY = 'bandit.sessionHistory.userId'

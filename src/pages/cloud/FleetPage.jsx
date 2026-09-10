@@ -30,13 +30,24 @@ import {
   getFleetById,
   rollupFleetFinancials,
 } from '../../data/fleetDemoCatalog'
+import MachineGlbViewer from '../../components/cloud/MachineGlbViewer'
 import {
   checkUpdates,
+  getModelInventoryPreset,
+  listCatalogModels,
   listCustomers,
   listProductInstances,
   listVenues,
   provisionDevice,
 } from '../../api/cloud'
+
+function inferProductId(modelOrId) {
+  const value = String(modelOrId || '')
+  if (value.startsWith('bandit-arena-') || value.startsWith('product-')) return value
+  if (/pro/i.test(value)) return 'bandit-arena-pro'
+  if (/core/i.test(value)) return 'bandit-arena-core'
+  return 'product-demo-treadmill'
+}
 
 function usd(n) {
   return new Intl.NumberFormat('en-US', {
@@ -86,12 +97,14 @@ export default function FleetPage({ initialTab = 'overview' }) {
   const [messageSeverity, setMessageSeverity] = useState('success')
   const [registerOpen, setRegisterOpen] = useState(false)
   const [computeSerialNumber, setComputeSerialNumber] = useState('')
-  const [deviceModel, setDeviceModel] = useState('BanditArena-Alpha')
+  const [deviceModel, setDeviceModel] = useState('product-demo-treadmill')
   const [venueId, setVenueId] = useState('')
   const [buyerKind, setBuyerKind] = useState('operator')
   const [buyerCustomerId, setBuyerCustomerId] = useState('')
   const [credentials, setCredentials] = useState(null)
   const [updateInfo, setUpdateInfo] = useState({})
+  const [catalogModels, setCatalogModels] = useState([])
+  const [modelGlbUrl, setModelGlbUrl] = useState(null)
 
   const fleet = useMemo(() => getFleetById(fleetId), [fleetId])
   const rollup = useMemo(() => rollupFleetFinancials(fleet), [fleet])
@@ -128,10 +141,11 @@ export default function FleetPage({ initialTab = 'overview' }) {
 
   const loadFleet = useCallback(async () => {
     setLoading(true)
-    const [instancesRes, venuesRes, customersRes] = await Promise.all([
+    const [instancesRes, venuesRes, customersRes, modelsRes] = await Promise.all([
       listProductInstances(),
       listVenues(),
       listCustomers(),
+      listCatalogModels(),
     ])
     if (instancesRes.error) {
       setError(instancesRes.error)
@@ -153,6 +167,7 @@ export default function FleetPage({ initialTab = 'overview' }) {
     const nextCustomers = customersRes.data?.customers || []
     setCustomers(nextCustomers)
     setBuyerCustomerId((current) => current || nextCustomers[0]?.customerId || '')
+    setCatalogModels(modelsRes.data?.products || [])
     setError('')
 
     const updates = {}
@@ -171,6 +186,17 @@ export default function FleetPage({ initialTab = 'overview' }) {
   }, [loadFleet])
 
   useEffect(() => {
+    if (!registerOpen) return undefined
+    let cancelled = false
+    getModelInventoryPreset(inferProductId(deviceModel)).then((res) => {
+      if (!cancelled) setModelGlbUrl(res.data?.product?.modelGlbUrl || null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [registerOpen, deviceModel])
+
+  useEffect(() => {
     setSelectedVenueId(fleet.venues[0]?.venueId || '')
     setSelectedId(fleet.devices[0]?.instanceId || '')
   }, [fleetId, fleet])
@@ -181,9 +207,11 @@ export default function FleetPage({ initialTab = 'overview' }) {
   }
 
   const handleProvision = async () => {
+    const selectedModel = catalogModels.find((product) => product.productId === deviceModel)
     const { data, error: apiError } = await provisionDevice({
       computeSerialNumber,
-      model: deviceModel,
+      model: selectedModel?.model || deviceModel,
+      productId: inferProductId(deviceModel),
       venueId,
       buyerKind,
       buyerCustomerId: buyerKind === 'customer' ? buyerCustomerId : undefined,
@@ -340,12 +368,13 @@ export default function FleetPage({ initialTab = 'overview' }) {
 
           {view === 'map' && (
             <FleetMapView
-              venues={fleet.venues}
+              venues={combinedVenuesForTransfer}
+              devices={listDevices}
               selectedVenueId={selectedVenueId}
               accent={fleet.accent}
               onSelectVenue={(id) => {
                 setSelectedVenueId(id)
-                const first = fleet.devices.find((d) => d.venueId === id)
+                const first = devices.find((d) => d.venueId === id)
                 if (first) setSelectedId(first.instanceId)
               }}
             />
@@ -456,7 +485,7 @@ export default function FleetPage({ initialTab = 'overview' }) {
 
         </Stack>
 
-        <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="xs" fullWidth>
+        <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Provision Device</DialogTitle>
           <DialogContent>
             <TextField
@@ -470,12 +499,26 @@ export default function FleetPage({ initialTab = 'overview' }) {
               inputProps={{ 'data-testid': 'register-compute-serial' }}
             />
             <TextField
+              select
               label="Model"
               fullWidth
               sx={{ mt: 2 }}
               value={deviceModel}
               onChange={(e) => setDeviceModel(e.target.value)}
-            />
+              inputProps={{ 'data-testid': 'register-model' }}
+            >
+              {(catalogModels.length
+                ? catalogModels
+                : [{ productId: 'product-demo-treadmill', name: 'Alpha lab', model: 'BanditArena-Alpha' }]
+              ).map((product) => (
+                <MenuItem key={product.productId} value={product.productId}>
+                  {product.name || product.model || product.productId}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Box sx={{ mt: 2 }}>
+              <MachineGlbViewer src={modelGlbUrl} label={deviceModel} />
+            </Box>
             <TextField
               select
               label="Venue"

@@ -133,6 +133,10 @@ function enrichSessionRow(session, user, deviceById, venueById) {
   }
 }
 
+function hasHistoryScope(userId, venueId, instanceId) {
+  return Boolean(userId || venueId || instanceId)
+}
+
 export default function SessionHistoryPage({ initialUserId = null } = {}) {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [loadingSessions, setLoadingSessions] = useState(false)
@@ -142,6 +146,9 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
   const [deviceById, setDeviceById] = useState(() => new Map())
   const [venueById, setVenueById] = useState(() => new Map())
   const [userFilter, setUserFilter] = useState(() => defaultPlayerFilter(initialUserId))
+  const [venueFilter, setVenueFilter] = useState('')
+  const [instanceFilter, setInstanceFilter] = useState('')
+  const [nextCursor, setNextCursor] = useState(null)
   const [selected, setSelected] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [metrics, setMetrics] = useState(null)
@@ -188,15 +195,19 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
     return { users: list, devices, venues }
   }, [])
 
-  const loadHistoryForPlayer = useCallback(async (filterUserId, directory) => {
-    if (!filterUserId) {
+  const loadHistory = useCallback(async (filters, directory, { append = false, cursor = null } = {}) => {
+    const filterUserId = filters.userId || ''
+    const filterVenueId = filters.venueId || ''
+    const filterInstanceId = filters.instanceId || ''
+    if (!hasHistoryScope(filterUserId, filterVenueId, filterInstanceId)) {
       setRows([])
+      setNextCursor(null)
       setLoadingSessions(false)
       return
     }
     setLoadingSessions(true)
     setError('')
-    rememberSessionHistoryUser(filterUserId)
+    if (filterUserId) rememberSessionHistoryUser(filterUserId)
 
     let usersList = directory?.users
     let devices = directory?.devices || deviceById
@@ -208,30 +219,42 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
       venues = loaded.venues
     }
 
-    const user = usersList.find((entry) => entry.userId === filterUserId)
-    if (!user) {
+    if (filterUserId && !usersList.find((entry) => entry.userId === filterUserId)) {
       setRows([])
+      setNextCursor(null)
       setError('Selected Player account was not found among enrolled accounts.')
       setLoadingSessions(false)
       return
     }
 
-    const sessionsRes = await listSessions({ userId: user.userId, limit: 200 })
+    const sessionsRes = await listSessions({
+      userId: filterUserId || undefined,
+      venueId: filterVenueId || undefined,
+      instanceId: filterInstanceId || undefined,
+      limit: 50,
+      cursor: append ? cursor : undefined,
+    })
     if (sessionsRes.error) {
       setError(sessionsRes.error)
-      setRows([])
+      if (!append) setRows([])
       setLoadingSessions(false)
       return
     }
-    const sessions = (sessionsRes.data?.sessions || []).map((session) =>
-      enrichSessionRow(session, user, devices, venues),
-    )
+    const sessions = (sessionsRes.data?.sessions || []).map((session) => {
+      const user =
+        usersList.find((entry) => entry.userId === session.userId) || {
+          userId: session.userId,
+          name: session.userId,
+        }
+      return enrichSessionRow(session, user, devices, venues)
+    })
     sessions.sort((a, b) => {
       const aMs = Date.parse(a.startTime || a.createdAt || '') || 0
       const bMs = Date.parse(b.startTime || b.createdAt || '') || 0
       return bMs - aMs
     })
-    setRows(sessions)
+    setRows((prev) => (append ? [...prev, ...sessions] : sessions))
+    setNextCursor(sessionsRes.data?.cursor || null)
     setLoadingSessions(false)
   }, [deviceById, loadDirectory, venueById])
 
@@ -245,8 +268,11 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
       if (fromNav || nextFilter !== userFilter) {
         setUserFilter(nextFilter)
       }
-      if (nextFilter) {
-        await loadHistoryForPlayer(nextFilter, directory)
+      if (hasHistoryScope(nextFilter, venueFilter, instanceFilter)) {
+        await loadHistory(
+          { userId: nextFilter, venueId: venueFilter, instanceId: instanceFilter },
+          directory,
+        )
       }
     })()
     return () => {
@@ -260,11 +286,11 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
     const onOpen = (event) => {
       const nextUserId = event?.detail?.userId || ''
       setUserFilter(nextUserId)
-      loadHistoryForPlayer(nextUserId)
+      loadHistory({ userId: nextUserId, venueId: venueFilter, instanceId: instanceFilter })
     }
     window.addEventListener('bandit:open-session-history', onOpen)
     return () => window.removeEventListener('bandit:open-session-history', onOpen)
-  }, [loadHistoryForPlayer])
+  }, [instanceFilter, loadHistory, venueFilter])
 
   const openDetail = async (row) => {
     setSelected(row)
@@ -310,27 +336,25 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
     <PageScaffold
       title="Session History"
       category="Operations"
-      description="Post-run Player session records scoped to one enrolled account (SVC-010). Live playback remains on Local Device."
+      description="Post-run Player session records (SVC-010). Scope by Player, Venue, or treadmill — no unscoped all-accounts fan-out. Live playback remains on Local Device."
     >
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems="center">
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2 }} alignItems="center" flexWrap="wrap">
         <TextField
           select
           size="small"
           label="Player account"
           value={userFilter}
-          required
           onChange={(e) => {
             const next = e.target.value
             setUserFilter(next)
-            loadHistoryForPlayer(next)
+            loadHistory({ userId: next, venueId: venueFilter, instanceId: instanceFilter })
           }}
-          sx={{ minWidth: 260 }}
+          sx={{ minWidth: 220 }}
           inputProps={{ 'data-testid': 'session-history-user-filter' }}
-          helperText="Alpha loads one Player at a time (no all-accounts fan-out)."
         >
           <MenuItem value="">
-            <em>Select a Player…</em>
+            <em>Any player</em>
           </MenuItem>
           {users.map((user) => (
             <MenuItem key={user.userId} value={user.userId}>
@@ -338,20 +362,73 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
             </MenuItem>
           ))}
         </TextField>
+        <TextField
+          select
+          size="small"
+          label="Venue"
+          value={venueFilter}
+          onChange={(e) => {
+            const next = e.target.value
+            const nextInstance =
+              instanceFilter && deviceById.get(instanceFilter)?.venueId === next
+                ? instanceFilter
+                : next
+                  ? ''
+                  : instanceFilter
+            setVenueFilter(next)
+            setInstanceFilter(nextInstance)
+            loadHistory({ userId: userFilter, venueId: next, instanceId: nextInstance })
+          }}
+          sx={{ minWidth: 220 }}
+          inputProps={{ 'data-testid': 'session-history-venue-filter' }}
+        >
+          <MenuItem value="">
+            <em>Any venue</em>
+          </MenuItem>
+          {[...venueById.values()].map((venue) => (
+            <MenuItem key={venue.venueId} value={venue.venueId}>
+              {venue.name || venue.venueId}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Treadmill"
+          value={instanceFilter}
+          onChange={(e) => {
+            const next = e.target.value
+            setInstanceFilter(next)
+            loadHistory({ userId: userFilter, venueId: venueFilter, instanceId: next })
+          }}
+          sx={{ minWidth: 220 }}
+          inputProps={{ 'data-testid': 'session-history-instance-filter' }}
+        >
+          <MenuItem value="">
+            <em>Any treadmill</em>
+          </MenuItem>
+          {[...deviceById.values()]
+            .filter((device) => !venueFilter || device.venueId === venueFilter)
+            .map((device) => (
+              <MenuItem key={device.instanceId} value={device.instanceId}>
+                {device.displayName || device.instanceId}
+              </MenuItem>
+            ))}
+        </TextField>
         <Button
           size="small"
-          onClick={() => loadHistoryForPlayer(userFilter)}
-          disabled={!userFilter}
+          onClick={() => loadHistory({ userId: userFilter, venueId: venueFilter, instanceId: instanceFilter })}
+          disabled={!hasHistoryScope(userFilter, venueFilter, instanceFilter)}
           data-testid="session-history-refresh"
         >
           Refresh
         </Button>
       </Stack>
 
-      {!userFilter ? (
+      {!hasHistoryScope(userFilter, venueFilter, instanceFilter) ? (
         <Alert severity="info" data-testid="session-history-scope-hint">
-          Select a Player account to load Session History. Use Enrollment → Session history to
-          open a specific account, or pick the last Player used on this console.
+          Select a Player, Venue, or treadmill to load Session History. Enrollment → Session
+          history still opens a specific Player. Unscoped all-accounts load is not allowed.
         </Alert>
       ) : loading ? (
         <CircularProgress size={28} />
@@ -375,7 +452,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
               <TableRow>
                 <TableCell colSpan={9}>
                   <Typography variant="body2" color="text.secondary">
-                    No sessions found for this Player.
+                    No sessions found for this scope.
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -418,6 +495,22 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
           </TableBody>
         </Table>
       )}
+      {hasHistoryScope(userFilter, venueFilter, instanceFilter) && nextCursor ? (
+        <Button
+          size="small"
+          sx={{ mt: 1 }}
+          onClick={() =>
+            loadHistory(
+              { userId: userFilter, venueId: venueFilter, instanceId: instanceFilter },
+              undefined,
+              { append: true, cursor: nextCursor },
+            )
+          }
+          data-testid="session-history-load-more"
+        >
+          Load more
+        </Button>
+      ) : null}
 
       <Dialog
         open={Boolean(selected)}

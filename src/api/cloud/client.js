@@ -393,7 +393,9 @@ export async function listOperationalLogs(params = {}) {
 
 export async function listPlatformIncidents(params = {}) {
   const qs = new URLSearchParams()
-  if (params.status) qs.set('status', params.status)
+  for (const key of ['status', 'operatorId']) {
+    if (params[key] != null && params[key] !== '') qs.set(key, String(params[key]))
+  }
   const suffix = qs.toString() ? `?${qs.toString()}` : ''
   return request(() => cloudApi.get(`/ops/incidents${suffix}`))
 }
@@ -586,6 +588,14 @@ export async function getFleetAnalytics(params = {}) {
 
 
 
+export async function getPlayerAnalytics(userId, params = {}) {
+
+  return request(() => cloudApi.get(`/analytics/players/${userId}`, { params }))
+
+}
+
+
+
 export async function updateEnrollmentState(userId, payload) {
 
   return request(() => cloudApi.patch(`/users/${userId}/enrollment`, payload))
@@ -770,6 +780,30 @@ export async function createCommerceOrder(payload) {
 
 
 
+export async function listCommerceQuotes() {
+
+  return request(() => cloudApi.get('/commerce/quotes'))
+
+}
+
+
+
+export async function getCommerceQuote(quoteId) {
+
+  return request(() => cloudApi.get(`/commerce/quotes/${quoteId}`))
+
+}
+
+
+
+export async function createCommerceQuote(payload) {
+
+  return request(() => cloudApi.post('/commerce/quotes', payload))
+
+}
+
+
+
 export async function getRevenueReport(query = {}) {
 
   const params = new URLSearchParams()
@@ -782,6 +816,30 @@ export async function getRevenueReport(query = {}) {
 
   return request(() => cloudApi.get(`/billing/revenue-report${qs ? `?${qs}` : ''}`))
 
+}
+
+export async function listBillingCycles() {
+  return request(() => cloudApi.get('/billing/cycles'))
+}
+
+export async function createBillingCycle(payload) {
+  return request(() => cloudApi.post('/billing/cycles', payload))
+}
+
+export async function listBillingInvoices() {
+  return request(() => cloudApi.get('/billing/invoices'))
+}
+
+export async function generateBillingInvoice(cycleId) {
+  return request(() => cloudApi.post(`/billing/cycles/${cycleId}/invoice`))
+}
+
+export async function reconcileBillingCycle(cycleId, payload) {
+  return request(() => cloudApi.post(`/billing/cycles/${cycleId}/reconcile`, payload))
+}
+
+export async function estimateBillingTax(payload) {
+  return request(() => cloudApi.post('/billing/tax-estimate', payload))
 }
 
 

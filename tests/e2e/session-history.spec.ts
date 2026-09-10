@@ -48,6 +48,33 @@ test('enrollment session history link opens Session History filtered to player',
   await expect(page.getByTestId('session-history-table')).toBeVisible();
 });
 
+test('session history loads by venue without a player first', async ({ page }) => {
+  await mockCloudApi(page, createCloudFixture());
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'operations', 'menu-sessions');
+  await expect(page.getByRole('heading', { name: 'Session History' })).toBeVisible();
+  await expect(page.getByTestId('session-history-scope-hint')).toBeVisible();
+
+  const listRequest = page.waitForRequest((request) => {
+    if (request.method() !== 'GET') return false;
+    const url = new URL(request.url());
+    const path = url.pathname.replace(/\/$/, '');
+    return (
+      path.endsWith('/sessions') &&
+      !path.includes('/users/') &&
+      url.searchParams.get('venueId') === 'venue-demo-001' &&
+      !url.searchParams.get('userId')
+    );
+  });
+  await page.getByLabel('Venue').click();
+  await page.getByRole('option', { name: 'Bandit Arena Lab' }).click();
+  await listRequest;
+  await expect(page.getByTestId('session-history-table')).toBeVisible();
+  await expect(page.getByText('session-demo-001')).toBeVisible();
+  await expect(page.getByTestId('session-history-user-filter')).toHaveValue('');
+});
+
 test('start session is disabled while a player session is active', async ({ page }) => {
   const { mockConsoleApis } = await import('../helpers/mockApis');
   const { selectEnrolledPlayer } = await import('../helpers/selectPlayer');

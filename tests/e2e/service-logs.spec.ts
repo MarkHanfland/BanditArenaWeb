@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
+import { signInAsCloudAdmin, signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi } from '../helpers/mockApis';
 import { expandMenuGroup, openMenuItem } from '../helpers/menuNav';
 
@@ -13,6 +13,16 @@ function opsFixture() {
       code: 'INTERNAL',
       route: 'GET /media',
       message: 'INTERNAL: boom',
+      operatorId: 'operator-demo-001',
+    },
+    {
+      logId: 'log-e2e-002',
+      timestamp: '2026-09-08T18:05:00.000Z',
+      severity: 'ERROR',
+      code: 'INTERNAL_OTHER',
+      route: 'GET /licenses',
+      message: 'INTERNAL_OTHER: other boom',
+      operatorId: 'operator-other-001',
     },
   ];
   fixture.opsIncidents = [
@@ -24,7 +34,12 @@ function opsFixture() {
       route: 'GET /media',
       count: 2,
       lastAt: '2026-09-08T18:00:00.000Z',
+      operatorId: 'operator-demo-001',
     },
+  ];
+  fixture.operators = [
+    { operatorId: 'operator-demo-001', name: 'Bandit Demo Operator' },
+    { operatorId: 'operator-other-001', name: 'Other Operator' },
   ];
   return fixture;
 }
@@ -61,6 +76,23 @@ test('SW-093: fleet admin views service logs and acknowledges an incident', asyn
   expect(fixture.opsIncidents.find((item) => item.incidentId === 'inc-e2e-001')?.status).toBe(
     'acknowledged',
   );
+});
+
+test('SW-093: cloud admin can filter service logs across operators', async ({ page }) => {
+  const fixture = opsFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsCloudAdmin(page);
+
+  await openMenuItem(page, 'administration', 'menu-service-logs');
+  await expect(page.getByTestId('service-logs-page')).toBeVisible();
+  await expect(page.getByTestId('service-logs-operator')).toBeVisible();
+  await expect(page.getByTestId('service-logs-table')).toContainText('INTERNAL_OTHER');
+  await expect(page.getByTestId('service-logs-table')).toContainText('operator-other-001');
+
+  await page.getByTestId('service-logs-operator').click();
+  await page.getByRole('option', { name: 'Other Operator' }).click();
+  await expect(page.getByTestId('service-logs-table')).toContainText('INTERNAL_OTHER');
+  await expect(page.getByTestId('service-logs-table')).not.toContainText('INTERNAL: boom');
 });
 
 test('SW-093: venue admin cannot open service logs', async ({ page }) => {

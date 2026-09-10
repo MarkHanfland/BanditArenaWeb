@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { signInAsVenueAdmin } from '../helpers/auth';
+import { signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi, mockConsoleApis } from '../helpers/mockApis';
 import { openMenuItem } from '../helpers/menuNav';
 
@@ -155,6 +155,7 @@ test('fleet register flow provisions a device', async ({ page }) => {
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
   await page.getByTestId('register-device').click();
+  await expect(page.getByRole('dialog', { name: 'Provision Device' }).getByTestId('machine-glb-placeholder')).toBeVisible();
   await page.getByTestId('register-compute-serial').fill('BA-COMPUTE-E2E-001');
   await page.getByTestId('register-device-submit').click();
   await expect(page.getByText(/Provisioned instance-new \(SN BA-COMPUTE-E2E-001\)/)).toBeVisible();
@@ -181,7 +182,10 @@ test('reservation book flow confirms a slot and sets the next player', async ({ 
   await expect(page.getByRole('heading', { name: 'Reservations' })).toBeVisible();
   await page.getByTestId('book-slot-001').click();
   await expect(page.getByText(/Booked slot-001 for Alex Runner/)).toBeVisible();
-  await expect(page.getByText(/Reminder queued/)).toBeVisible();
+  await expect(page.getByText(/Confirmation queued/)).toBeVisible();
+  await page.getByTestId('cancel-slot-001').click();
+  await expect(page.getByText(/Cancelled slot-001/)).toBeVisible();
+  await expect(page.getByText(/Confirmation queued/)).toBeVisible();
 });
 
 test('staff assign role records a venue operator', async ({ page }) => {
@@ -240,18 +244,65 @@ test('commerce spare order submits for a device', async ({ page }) => {
   await expect(page.getByTestId('billing-message')).toContainText('Order ord-');
 });
 
+test('commerce multi-unit quote does not create an order', async ({ page }) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'business', 'menu-billing');
+  await page.getByTestId('commerce-tab-quotes').click();
+  await page.getByTestId('commerce-create-quote').click();
+  await expect(page.getByTestId('quote-sku')).toHaveValue('BA-CORE-BUNDLE');
+  await expect(page.getByTestId('quote-qty')).toHaveValue('2');
+  await page.getByTestId('quote-submit').click();
+  await expect(page.getByTestId('billing-message')).toContainText('Quote qte-');
+  await expect(page.getByTestId('billing-message')).toContainText('no payment');
+  await expect(page.getByTestId('commerce-quotes-table')).toContainText('qte-');
+  expect(fixture.orders).toHaveLength(0);
+  expect(fixture.quotes).toHaveLength(1);
+  expect(fixture.quotes[0].paymentTriggered).toBe(false);
+});
+
+test('billing close cycle and reconcile', async ({ page }) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsVenueAdmin(page);
+
+  await openMenuItem(page, 'business', 'menu-billing');
+  await page.getByTestId('commerce-tab-cycles').click();
+  await page.getByTestId('commerce-close-cycle').click();
+  await expect(page.getByTestId('billing-message')).toContainText('Cycle cyc-');
+  await expect(page.getByTestId('commerce-cycles-table')).toContainText('cyc-');
+  const cycleId = fixture.cycles[0].cycleId as string;
+  await page.getByTestId(`reconcile-${cycleId}`).click();
+  await expect(page.getByTestId('billing-message')).toContainText('Reconciled');
+  expect(fixture.cycles[0].status).toBe('reconciled');
+});
+
 test('analytics page shows summary cards', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
   await openMenuItem(page, 'analytics', 'menu-usage');
-  await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Analytics', exact: true })).toBeVisible();
   await expect(page.getByText('Sessions (7d)')).toBeVisible();
   await expect(page.getByTestId('analytics-sessions')).toHaveText('5');
   await expect(page.getByTestId('analytics-utilization')).toHaveText('12%');
-  await expect(page.getByTestId('analytics-fleet-live')).toBeVisible();
+  await expect(page.getByTestId('analytics-player')).toContainText('Alex Runner');
+  await expect(page.getByTestId('analytics-fleet-live')).toHaveCount(0);
   await expect(page.getByTestId('analytics-trend')).toBeVisible();
   await expect(page.getByText('1 → 2 → 3')).toBeVisible();
+});
+
+test('SW-060: fleet admin sees live fleet analytics', async ({ page }) => {
+  const fixture = createCloudFixture();
+  fixture.denyFleetAnalytics = false;
+  await mockCloudApi(page, fixture);
+  await signInAsFleetAdmin(page);
+
+  await openMenuItem(page, 'analytics', 'menu-usage');
+  await expect(page.getByTestId('analytics-fleet-live')).toBeVisible();
+  await expect(page.getByTestId('analytics-fleet-venue-venue-demo-001')).toBeVisible();
 });
 
 test('SW-090: analytics alert ack and notification history', async ({ page }) => {
@@ -272,6 +323,10 @@ test('SW-090: analytics alert ack and notification history', async ({ page }) =>
   await expect(page.getByTestId('notification-notif-1')).toBeVisible();
   await expect(page.getByTestId('analytics-notifications')).toContainText('session_reminder');
   expect(fixture.notifications.length).toBeGreaterThan(0);
+
+  await page.getByTestId('send-push-reminder').click();
+  await expect(page.getByTestId('analytics-notifications')).toContainText('push');
+  expect(fixture.notifications.some((n) => n.channel === 'push')).toBeTruthy();
 });
 
 test('maintenance records an event for the selected device', async ({ page }) => {
@@ -294,7 +349,9 @@ test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) 
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByTestId('fleet-map')).toBeVisible();
+  await expect(page.getByTestId('fleet-map-unavailable')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Neon Circuit' })).toBeVisible();
+  await expect(page.getByTestId('machine-glb-placeholder')).toBeVisible();
   await page.getByTestId('fleet-fleet-horizon-parks').click();
   await expect(page.getByRole('heading', { name: 'Horizon Parks' })).toBeVisible();
   await page.getByTestId('fleet-tab-financial').click();

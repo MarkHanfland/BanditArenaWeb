@@ -15,9 +15,12 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
+import { useAuth } from '../../auth/useAuth'
+import { deriveUserRole, ROLE_CLOUD_ADMIN } from '../../auth/rolePermissions'
 import {
   acknowledgePlatformIncident,
   listOperationalLogs,
+  listOperators,
   listPlatformIncidents,
 } from '../../api/cloud'
 
@@ -36,6 +39,8 @@ function formatWhen(iso) {
 }
 
 export default function ServiceLogsPage() {
+  const { user } = useAuth()
+  const isCloudAdmin = deriveUserRole(user) === ROLE_CLOUD_ADMIN
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionMessage, setActionMessage] = useState('')
@@ -44,14 +49,18 @@ export default function ServiceLogsPage() {
   const [severity, setSeverity] = useState('WARNING')
   const [route, setRoute] = useState('')
   const [q, setQ] = useState('')
+  const [operatorFilter, setOperatorFilter] = useState('all')
+  const [operators, setOperators] = useState([])
   const [busyId, setBusyId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
-    const [logsRes, incidentsRes] = await Promise.all([
-      listOperationalLogs({ severity, route, q }),
-      listPlatformIncidents(),
+    const operatorId = isCloudAdmin && operatorFilter !== 'all' ? operatorFilter : undefined
+    const [logsRes, incidentsRes, operatorsRes] = await Promise.all([
+      listOperationalLogs({ severity, route, q, operatorId }),
+      listPlatformIncidents({ operatorId }),
+      isCloudAdmin ? listOperators() : Promise.resolve({ data: { operators: [] } }),
     ])
     if (logsRes.error) {
       setError(logsRes.error)
@@ -65,8 +74,9 @@ export default function ServiceLogsPage() {
     } else {
       setIncidents(incidentsRes.data?.incidents || [])
     }
+    setOperators(operatorsRes.data?.operators || [])
     setLoading(false)
-  }, [q, route, severity])
+  }, [isCloudAdmin, operatorFilter, q, route, severity])
 
   useEffect(() => {
     load()
@@ -125,6 +135,24 @@ export default function ServiceLogsPage() {
             onChange={(event) => setQ(event.target.value)}
             sx={{ minWidth: 200 }}
           />
+          {isCloudAdmin ? (
+            <TextField
+              select
+              size="small"
+              label="Operator"
+              value={operatorFilter}
+              onChange={(event) => setOperatorFilter(event.target.value)}
+              sx={{ minWidth: 220 }}
+              data-testid="service-logs-operator"
+            >
+              <MenuItem value="all">All operators</MenuItem>
+              {operators.map((row) => (
+                <MenuItem key={row.operatorId} value={row.operatorId}>
+                  {row.name || row.operatorId}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           <Button variant="outlined" onClick={load} disabled={loading}>
             Refresh
           </Button>
@@ -141,6 +169,7 @@ export default function ServiceLogsPage() {
                 <TableCell>Severity</TableCell>
                 <TableCell>Code</TableCell>
                 <TableCell>Route</TableCell>
+                <TableCell>Operator</TableCell>
                 <TableCell>Count</TableCell>
                 <TableCell>Last seen</TableCell>
                 <TableCell />
@@ -149,7 +178,7 @@ export default function ServiceLogsPage() {
             <TableBody>
               {incidents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7}>
+                  <TableCell colSpan={8}>
                     <Typography color="text.secondary">No platform incidents.</Typography>
                   </TableCell>
                 </TableRow>
@@ -162,6 +191,7 @@ export default function ServiceLogsPage() {
                     </TableCell>
                     <TableCell>{incident.code}</TableCell>
                     <TableCell>{incident.route}</TableCell>
+                    <TableCell>{incident.operatorId || '—'}</TableCell>
                     <TableCell>{incident.count || 1}</TableCell>
                     <TableCell>{formatWhen(incident.lastAt || incident.openedAt)}</TableCell>
                     <TableCell>
@@ -196,13 +226,14 @@ export default function ServiceLogsPage() {
                 <TableCell>Severity</TableCell>
                 <TableCell>Code</TableCell>
                 <TableCell>Route</TableCell>
+                <TableCell>Operator</TableCell>
                 <TableCell>Message</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {entries.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <Typography color="text.secondary">No operational log entries at this severity.</Typography>
                   </TableCell>
                 </TableRow>
@@ -215,6 +246,7 @@ export default function ServiceLogsPage() {
                     </TableCell>
                     <TableCell>{entry.code}</TableCell>
                     <TableCell>{entry.route}</TableCell>
+                    <TableCell>{entry.operatorId || '—'}</TableCell>
                     <TableCell>{entry.message}</TableCell>
                   </TableRow>
                 ))

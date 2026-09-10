@@ -25,12 +25,18 @@ import PageScaffold from '../../components/shared/PageScaffold'
 import {
   checkCommerceCompatibility,
   createCommerceOrder,
+  createCommerceQuote,
   getModelInventoryPreset,
   getRevenueReport,
+  listBillingCycles,
+  createBillingCycle,
+  generateBillingInvoice,
+  reconcileBillingCycle,
   issueLicense,
   listCatalogModels,
   listCommerceOfferings,
   listCommerceOrders,
+  listCommerceQuotes,
   listLicensePlans,
   listLicenses,
   listProductInstances,
@@ -67,10 +73,12 @@ export default function BillingPage() {
   const [message, setMessage] = useState('')
   const [offerings, setOfferings] = useState([])
   const [orders, setOrders] = useState([])
+  const [quotes, setQuotes] = useState([])
   const [models, setModels] = useState([])
   const [preset, setPreset] = useState([])
   const [selectedModel, setSelectedModel] = useState('bandit-arena-core')
   const [revenue, setRevenue] = useState(null)
+  const [cycles, setCycles] = useState([])
   const [licenses, setLicenses] = useState([])
   const [plans, setPlans] = useState([])
   const [instances, setInstances] = useState([])
@@ -81,6 +89,9 @@ export default function BillingPage() {
   const [orderSku, setOrderSku] = useState('BA-SPARE-MEMBRANE')
   const [orderDevice, setOrderDevice] = useState('instance-demo-001')
   const [compatNote, setCompatNote] = useState('')
+  const [quoteOpen, setQuoteOpen] = useState(false)
+  const [quoteSku, setQuoteSku] = useState('BA-CORE-BUNDLE')
+  const [quoteQty, setQuoteQty] = useState(2)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -88,16 +99,20 @@ export default function BillingPage() {
     const [
       offeringsRes,
       ordersRes,
+      quotesRes,
       modelsRes,
       revenueRes,
+      cyclesRes,
       licensesRes,
       plansRes,
       instancesRes,
     ] = await Promise.all([
       listCommerceOfferings(),
       listCommerceOrders(),
+      listCommerceQuotes(),
       listCatalogModels(),
       getRevenueReport(),
+      listBillingCycles(),
       listLicenses(),
       listLicensePlans(),
       listProductInstances(),
@@ -105,8 +120,10 @@ export default function BillingPage() {
     if (offeringsRes.error) setError(offeringsRes.error)
     setOfferings(offeringsRes.data?.offerings || [])
     setOrders(ordersRes.data?.orders || [])
+    setQuotes(quotesRes.data?.quotes || [])
     setModels(modelsRes.data?.products || [])
     setRevenue(revenueRes.data || null)
+    setCycles(cyclesRes.data?.cycles || [])
     setLicenses(licensesRes.data?.licenses || [])
     setPlans(plansRes.data?.plans || [])
     setInstances(instancesRes.data?.instances || [])
@@ -186,11 +203,70 @@ export default function BillingPage() {
     await loadAll()
   }
 
+  const handleQuote = async () => {
+    setMessage('')
+    const quantity = Math.max(1, Number(quoteQty) || 1)
+    const { data, error: apiError } = await createCommerceQuote({
+      lines: [{ skuId: quoteSku, quantity }],
+      buyerKind: 'customer',
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setQuoteOpen(false)
+    setMessage(
+      `Quote ${data?.quote?.quoteId} · ${usd(data?.quote?.totalUsd)} · no payment`,
+    )
+    await loadAll()
+  }
+
+  const handleCloseCycle = async () => {
+    setMessage('')
+    const now = new Date()
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+    const { data, error: apiError } = await createBillingCycle({
+      periodStart: start,
+      periodEnd: now.toISOString(),
+      jurisdiction: 'US-IL',
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Cycle ${data?.cycle?.cycleId} · ${usd(data?.cycle?.amountDueUsd)} due`)
+    await loadAll()
+  }
+
+  const handleInvoice = async (cycleId) => {
+    setMessage('')
+    const { data, error: apiError } = await generateBillingInvoice(cycleId)
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Invoice ${data?.invoice?.invoiceId} · ${usd(data?.invoice?.totalUsd)}`)
+    await loadAll()
+  }
+
+  const handleReconcile = async (cycleId) => {
+    setMessage('')
+    const { data, error: apiError } = await reconcileBillingCycle(cycleId, {
+      transactionId: `txn-${Date.now()}`,
+    })
+    if (apiError) {
+      setMessage(apiError)
+      return
+    }
+    setMessage(`Reconciled ${data?.cycle?.cycleId}`)
+    await loadAll()
+  }
+
   return (
     <PageScaffold
       title="Commerce"
       category="Cloud"
-      description="Offerings, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
+      description="Offerings, enterprise quotes (no payment), billing cycles, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
@@ -208,8 +284,10 @@ export default function BillingPage() {
         scrollButtons="auto"
       >
         <Tab label="Offerings" value="offerings" data-testid="commerce-tab-offerings" />
+        <Tab label="Quotes" value="quotes" data-testid="commerce-tab-quotes" />
         <Tab label="Models & BOM" value="models" data-testid="commerce-tab-models" />
         <Tab label="Licensing" value="licensing" data-testid="commerce-tab-licensing" />
+        <Tab label="Cycles" value="cycles" data-testid="commerce-tab-cycles" />
         <Tab label="Revenue" value="revenue" data-testid="commerce-tab-revenue" />
       </Tabs>
 
@@ -263,6 +341,49 @@ export default function BillingPage() {
                   <TableCell align="right">{usd(o.totalUsd)}</TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        </Stack>
+      )}
+
+      {!loading && tab === 'quotes' && (
+        <Stack spacing={2}>
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" data-testid="commerce-create-quote" onClick={() => setQuoteOpen(true)}>
+              Create quote
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Multi-unit enterprise quotes do not charge a payment processor and do not create an order.
+          </Typography>
+          <Table size="small" data-testid="commerce-quotes-table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Quote</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Units</TableCell>
+                <TableCell>Stream</TableCell>
+                <TableCell align="right">Total</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {quotes.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography color="text.secondary">No quotes yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                quotes.map((q) => (
+                  <TableRow key={q.quoteId}>
+                    <TableCell>{q.quoteId}</TableCell>
+                    <TableCell>{q.status}</TableCell>
+                    <TableCell>{q.unitCount ?? '—'}</TableCell>
+                    <TableCell>{q.stream}</TableCell>
+                    <TableCell align="right">{usd(q.totalUsd)}</TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </Stack>
@@ -375,6 +496,73 @@ export default function BillingPage() {
                           data-testid={`revoke-${license.licenseId}`}
                         >
                           Revoke
+                        </Button>
+                      </>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Stack>
+      )}
+
+      {!loading && tab === 'cycles' && (
+        <Stack spacing={2} data-testid="commerce-cycles">
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" data-testid="commerce-close-cycle" onClick={handleCloseCycle}>
+              Close current cycle
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            Cycles roll up paid Bandit streams. Invoice download uses a placeholder URL until the
+            billing bucket is configured. Reconciliation records an external transaction — no
+            payment processor.
+          </Typography>
+          <Table size="small" data-testid="commerce-cycles-table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Cycle</TableCell>
+                <TableCell>Period</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Amount due</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {cycles.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography color="text.secondary">No billing cycles yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+              {cycles.map((cycle) => (
+                <TableRow key={cycle.cycleId}>
+                  <TableCell>{cycle.cycleId}</TableCell>
+                  <TableCell>
+                    {cycle.periodStart ? new Date(cycle.periodStart).toLocaleDateString() : '—'}
+                    {' – '}
+                    {cycle.periodEnd ? new Date(cycle.periodEnd).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell>{cycle.status}</TableCell>
+                  <TableCell align="right">{usd(cycle.amountDueUsd)}</TableCell>
+                  <TableCell align="right">
+                    {cycle.status !== 'reconciled' && (
+                      <>
+                        <Button
+                          size="small"
+                          onClick={() => handleInvoice(cycle.cycleId)}
+                          data-testid={`invoice-${cycle.cycleId}`}
+                        >
+                          Invoice
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => handleReconcile(cycle.cycleId)}
+                          data-testid={`reconcile-${cycle.cycleId}`}
+                        >
+                          Reconcile
                         </Button>
                       </>
                     )}
@@ -510,6 +698,42 @@ export default function BillingPage() {
           <Button onClick={() => setOrderOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleOrder} data-testid="order-submit">
             Submit order
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={quoteOpen} onClose={() => setQuoteOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Create enterprise quote</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              select
+              label="SKU"
+              fullWidth
+              value={quoteSku}
+              onChange={(e) => setQuoteSku(e.target.value)}
+              inputProps={{ 'data-testid': 'quote-sku' }}
+            >
+              {offerings.map((o) => (
+                <MenuItem key={o.skuId} value={o.skuId}>
+                  {o.skuId} · {o.offeringType}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Quantity"
+              fullWidth
+              value={quoteQty}
+              onChange={(e) => setQuoteQty(e.target.value)}
+              inputProps={{ 'data-testid': 'quote-qty', min: 1 }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQuoteOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleQuote} data-testid="quote-submit">
+            Save quote
           </Button>
         </DialogActions>
       </Dialog>
