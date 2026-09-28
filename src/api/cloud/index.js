@@ -66,6 +66,8 @@ export {
   checkDeviceEntitlement,
   createUpdateDownloadToken,
   acknowledgeUpdate,
+  queueEmergencyPatch,
+  pushFirmware,
   listReservations,
   bookReservation,
   createReservationSlot,

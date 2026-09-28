@@ -31,6 +31,7 @@ import {
   rollupFleetFinancials,
 } from '../../data/fleetDemoCatalog'
 import MachineGlbViewer from '../../components/cloud/MachineGlbViewer'
+import EmergencyPatchDialog from './fleet/EmergencyPatchDialog'
 import {
   checkUpdates,
   getModelInventoryPreset,
@@ -96,6 +97,7 @@ export default function FleetPage({ initialTab = 'overview' }) {
   const [message, setMessage] = useState('')
   const [messageSeverity, setMessageSeverity] = useState('success')
   const [registerOpen, setRegisterOpen] = useState(false)
+  const [patchOpen, setPatchOpen] = useState(false)
   const [computeSerialNumber, setComputeSerialNumber] = useState('')
   const [deviceModel, setDeviceModel] = useState('product-demo-treadmill')
   const [venueId, setVenueId] = useState('')
@@ -316,6 +318,9 @@ export default function FleetPage({ initialTab = 'overview' }) {
                   List
                 </ToggleButton>
               </ToggleButtonGroup>
+              <Button variant="outlined" onClick={() => setPatchOpen(true)} data-testid="emergency-patch-fleet">
+                Emergency patch
+              </Button>
               <Button variant="contained" onClick={() => setRegisterOpen(true)} data-testid="register-device">
                 Provision Device
               </Button>
@@ -484,6 +489,16 @@ export default function FleetPage({ initialTab = 'overview' }) {
           </Stack>
 
         </Stack>
+
+        <EmergencyPatchDialog
+          open={patchOpen}
+          onClose={() => setPatchOpen(false)}
+          onDone={showMessage}
+          instanceId={selectedDevice?.instanceId}
+          venueId={selectedDevice?.venueId || selectedVenueId}
+          allowVenue
+          allowTenant
+        />
 
         <Dialog open={registerOpen} onClose={() => setRegisterOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Provision Device</DialogTitle>

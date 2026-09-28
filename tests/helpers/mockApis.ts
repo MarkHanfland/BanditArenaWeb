@@ -1,6 +1,7 @@
 const demoOperator = {
   operatorId: 'operator-demo-001',
   name: 'Bandit Demo Operator',
+  status: 'active',
   sessionLimitPerDay: 8,
   schedulingPolicy: 'commercial',
   timezone: 'America/Chicago',
@@ -253,8 +254,26 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         name: body.name || 'New Operator',
         status: 'active',
       };
-      fixture.operators = [...(fixture.operators || []), tenant];
+      fixture.operators = [...(fixture.operators || [{ ...demoOperator }]), operator];
       return json({ operator, message: 'Operator created' }, 201);
+    }
+    const operatorItem = path.match(/^\/operators\/([^/]+)$/);
+    if (operatorItem && operatorItem[1] !== 'me' && method === 'PATCH') {
+      const body = route.request().postDataJSON() || {};
+      const operators = fixture.operators || [{ ...demoOperator }];
+      const operator = operators.find((entry) => entry.operatorId === operatorItem[1]);
+      if (!operator) return json({ error: 'Operator not found' }, 404);
+      Object.assign(operator, body);
+      fixture.operators = operators;
+      return json({ operator, message: 'Operator updated' });
+    }
+    if (operatorItem && operatorItem[1] !== 'me' && method === 'DELETE') {
+      const operators = fixture.operators || [{ ...demoOperator }];
+      const operator = operators.find((entry) => entry.operatorId === operatorItem[1]);
+      if (!operator) return json({ error: 'Operator not found' }, 404);
+      operator.status = 'deactivated';
+      fixture.operators = operators;
+      return json({ operator, message: 'Operator deactivated' });
     }
     if (path === '/customers' && method === 'GET') {
       return json({
@@ -269,8 +288,26 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         name: body.name || 'New Customer',
         status: 'active',
       };
-      fixture.customers = [...(fixture.customers || []), customer];
+      fixture.customers = [...(fixture.customers || [{ ...demoCustomer }]), customer];
       return json({ customer, message: 'Customer created' }, 201);
+    }
+    const customerItem = path.match(/^\/customers\/([^/]+)$/);
+    if (customerItem && method === 'PATCH') {
+      const body = route.request().postDataJSON() || {};
+      const customers = fixture.customers || [{ ...demoCustomer }];
+      const customer = customers.find((entry) => entry.customerId === customerItem[1]);
+      if (!customer) return json({ error: 'Customer not found' }, 404);
+      Object.assign(customer, body);
+      fixture.customers = customers;
+      return json({ customer, message: 'Customer updated' });
+    }
+    if (customerItem && method === 'DELETE') {
+      const customers = fixture.customers || [{ ...demoCustomer }];
+      const customer = customers.find((entry) => entry.customerId === customerItem[1]);
+      if (!customer) return json({ error: 'Customer not found' }, 404);
+      customer.status = 'deactivated';
+      fixture.customers = customers;
+      return json({ customer, message: 'Customer deactivated' });
     }
     if (path === '/venues' && method === 'GET') {
       const customers = fixture.customers || [demoCustomer]
@@ -294,8 +331,26 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
         ownerCustomerId,
         ownerName: owner?.name || null,
       };
-      fixture.venues = [...(fixture.venues || []), venue];
+      fixture.venues = [...(fixture.venues || [{ ...demoVenue }]), venue];
       return json({ venue, message: 'Venue created' }, 201);
+    }
+    const venueItem = path.match(/^\/venues\/([^/]+)$/);
+    if (venueItem && method === 'PATCH') {
+      const body = route.request().postDataJSON() || {};
+      const venues = fixture.venues || [{ ...demoVenue }];
+      const venue = venues.find((entry) => entry.venueId === venueItem[1]);
+      if (!venue) return json({ error: 'Venue not found' }, 404);
+      Object.assign(venue, body);
+      fixture.venues = venues;
+      return json({ venue, message: 'Venue updated' });
+    }
+    if (venueItem && method === 'DELETE') {
+      const venues = fixture.venues || [{ ...demoVenue }];
+      const venue = venues.find((entry) => entry.venueId === venueItem[1]);
+      if (!venue) return json({ error: 'Venue not found' }, 404);
+      venue.status = 'deactivated';
+      fixture.venues = venues;
+      return json({ venue, message: 'Venue deactivated' });
     }
     const venueRoles = path.match(/^\/venues\/([^/]+)\/roles$/);
     if (venueRoles && method === 'GET') {

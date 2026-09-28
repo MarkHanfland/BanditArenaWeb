@@ -37,6 +37,7 @@ import {
   transferDevice,
 } from '../../../api/cloud'
 import MachineGlbViewer from '../../../components/cloud/MachineGlbViewer'
+import EmergencyPatchDialog from './EmergencyPatchDialog'
 
 function inferProductId(device) {
   const value = String(device?.productId || device?.banditProductId || device?.model || '')
@@ -111,6 +112,7 @@ export default function DeviceWorkbench({
   const [diagCommand, setDiagCommand] = useState('RUN_SELF_TEST')
   const [ticketSubject, setTicketSubject] = useState('')
   const [modelGlbUrl, setModelGlbUrl] = useState(null)
+  const [patchOpen, setPatchOpen] = useState(false)
 
   useEffect(() => {
     setTab(TAB_IDS.includes(initialTab) ? initialTab : 'overview')
@@ -339,6 +341,13 @@ export default function DeviceWorkbench({
           ) : (
             <Typography color="text.secondary">Up to date.</Typography>
           )}
+          <Button
+            variant="outlined"
+            data-testid="emergency-patch-device"
+            onClick={() => setPatchOpen(true)}
+          >
+            Emergency patch this device
+          </Button>
         </Stack>
       )}
 
@@ -570,6 +579,14 @@ export default function DeviceWorkbench({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <EmergencyPatchDialog
+        open={patchOpen}
+        onClose={() => setPatchOpen(false)}
+        onDone={onMessage}
+        instanceId={device.instanceId}
+        venueId={device.venueId}
+      />
 
       <Dialog open={transferOpen} onClose={() => setTransferOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Transfer device</DialogTitle>

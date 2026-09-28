@@ -468,6 +468,22 @@ export async function acknowledgeUpdate(payload) {
 
 
 
+export async function queueEmergencyPatch(payload) {
+
+  return request(() => cloudApi.post('/updates/emergency-patch', payload))
+
+}
+
+
+
+export async function pushFirmware(payload) {
+
+  return request(() => cloudApi.post('/admin/firmware-push', payload))
+
+}
+
+
+
 export async function listReservations() {
 
   return request(() => cloudApi.get('/reservations'))

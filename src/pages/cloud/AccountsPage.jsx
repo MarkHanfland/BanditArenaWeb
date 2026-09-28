@@ -284,6 +284,7 @@ export default function AccountsPage() {
                         size="small"
                         disabled={row.status === 'deactivated'}
                         onClick={() => handleDeactivate(id)}
+                        data-testid={`accounts-deactivate-${id}`}
                       >
                         Deactivate
                       </Button>
@@ -307,6 +308,7 @@ export default function AccountsPage() {
             sx={{ mt: 1 }}
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
+            inputProps={{ 'data-testid': 'accounts-edit-name' }}
           />
           {tab === 'customers' && (
             <>
@@ -354,7 +356,12 @@ export default function AccountsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setEditRow(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSaveEdit} disabled={!editName.trim()}>
+          <Button
+            variant="contained"
+            onClick={handleSaveEdit}
+            disabled={!editName.trim()}
+            data-testid="accounts-save"
+          >
             Save
           </Button>
         </DialogActions>
