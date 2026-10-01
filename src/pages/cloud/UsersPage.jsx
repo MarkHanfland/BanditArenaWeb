@@ -22,8 +22,6 @@ import {
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
 import {
-  checkEntitlement,
-  createSession,
   createUser,
   getOperatorMe,
   getUser,
@@ -34,7 +32,6 @@ import {
 } from '../../api/cloud'
 import { isCloudDeployment } from '../../config/runtime'
 import { SESSION_PHASE, usePlayerSession } from '../../session/PlayerSessionContext'
-import { resolveSessionDeviceContext } from '../../session/sessionDeviceContext'
 import { requestSessionHistoryForUser } from '../../nav/sessionHistoryNav'
 
 const ENROLLMENT_ACTIONS = {
@@ -175,7 +172,13 @@ export default function UsersPage() {
         displayName: user?.name || userId,
         ageAttested: Boolean(user?.ageAttested),
         mediaId: selectedMediaId,
+        user,
+        cloudReachable: true,
       })
+      if (started && started.ok === false) {
+        setActionMessage(started.message)
+        return
+      }
       if (!started) {
         setActionMessage('Device session start failed. Use the header Player Start after selecting an enrolled Player.')
         return
@@ -183,31 +186,9 @@ export default function UsersPage() {
       setActionMessage(`Device session started for ${user?.name || userId}`)
       return
     }
-    if (!selectedMediaId) {
-      setActionMessage('Select a media title before creating a cloud session record.')
-      return
-    }
-    const entitlement = await checkEntitlement({ userId, action: 'session_start' })
-    if (entitlement.error || !entitlement.data?.allowed) {
-      setActionMessage(entitlement.error || 'Session blocked: enrollment not active')
-      return
-    }
-    const deviceCtx = await resolveSessionDeviceContext({})
-    const sessionRes = await createSession({
-      userId,
-      mediaId: selectedMediaId,
-      banditProductId: 'product-demo-treadmill',
-      ...deviceCtx,
-    })
-    if (sessionRes.error) {
-      setActionMessage(sessionRes.error)
-      return
-    }
-    setActionMessage(`Cloud session record ${sessionRes.data?.session?.sessionId} created. This does not start the treadmill.`)
-    if (selectedUser?.userId === userId) {
-      const sessionsRes = await listUserSessions(userId)
-      setSessions(sessionsRes.data?.sessions || [])
-    }
+    // FR-SW-AUTH-010: session records are written by the device only. Away from the
+    // treadmill the console cannot start or record a session.
+    setActionMessage('Start the session at the treadmill. The device records it in Session History.')
   }
 
   return (
@@ -216,7 +197,7 @@ export default function UsersPage() {
       category="Operations"
       description={onDevice
         ? 'Enroll Player accounts here. Start a run from the header: pick a Player and Start. Age 8+ is attested when the account is created.'
-        : 'Enrollment state and safety profiles for Player accounts. Creating a cloud session record does not start the treadmill.'}
+        : 'Enrollment state and safety profiles for Player accounts. Sessions are started at the treadmill.'}
     >
       {operator && (
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

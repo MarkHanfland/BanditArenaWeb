@@ -12,7 +12,7 @@ import {
   Checkbox,
   Typography,
 } from '@mui/material'
-import { pushFirmware, queueEmergencyPatch } from '../../../api/cloud'
+import { queueEmergencyPatch } from '../../../api/cloud'
 import { PATCH_SCOPE, planEmergencyPatch } from './emergencyPatch'
 
 const SCOPE_LABEL = {
@@ -67,11 +67,7 @@ export default function EmergencyPatchDialog({
       return
     }
     setBusy(true)
-    const call =
-      plan.route === '/updates/emergency-patch'
-        ? queueEmergencyPatch(plan.payload)
-        : pushFirmware(plan.payload)
-    const { error } = await call
+    const { error } = await queueEmergencyPatch(plan.payload)
     setBusy(false)
     if (error) {
       onDone?.(error, 'error')

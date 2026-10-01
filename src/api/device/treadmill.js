@@ -87,6 +87,18 @@ export async function pingDevice() {
   }
 }
 
+export async function resumeSession(body) {
+  try {
+    const response = await deviceApi.post('/session/resume', body)
+    return { data: response.data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error.response?.data?.error || error.message,
+    }
+  }
+}
+
 export async function getCurrentSession() {
   try {
     const response = await deviceApi.get('/session/current')
@@ -108,6 +120,7 @@ export async function startSession({
   simulationMode = '',
   deterministicConfig = '',
   capabilities = [],
+  profile = null,
 }) {
   try {
     const response = await deviceApi.post(
@@ -121,6 +134,7 @@ export async function startSession({
         simulationMode: simulationMode || '',
         deterministicConfig: deterministicConfig || '',
         capabilities: Array.isArray(capabilities) ? capabilities : [],
+        ...(profile ? { profile } : {}),
       },
       // Test-media sessions start CameraSimulator then wait for tracking (can exceed default 5s).
       { timeout: 35000 },

@@ -16,11 +16,10 @@ import {
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
 import { useAuth } from '../../auth/useAuth'
-import { deriveUserRole, ROLE_CLOUD_ADMIN } from '../../auth/rolePermissions'
+import { cloudCapabilities } from '../../auth/rolePermissions'
 import {
   acknowledgePlatformIncident,
   listOperationalLogs,
-  listOperators,
   listPlatformIncidents,
 } from '../../api/cloud'
 
@@ -40,7 +39,9 @@ function formatWhen(iso) {
 
 export default function ServiceLogsPage() {
   const { user } = useAuth()
-  const isCloudAdmin = deriveUserRole(user) === ROLE_CLOUD_ADMIN
+  // FR-SW-SVC-018: Fleet and Cloud Administrator read their own tenant;
+  // acknowledging an incident is Fleet Administrator only.
+  const canAck = cloudCapabilities(user).fleetAdmin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [actionMessage, setActionMessage] = useState('')
@@ -49,18 +50,15 @@ export default function ServiceLogsPage() {
   const [severity, setSeverity] = useState('WARNING')
   const [route, setRoute] = useState('')
   const [q, setQ] = useState('')
-  const [operatorFilter, setOperatorFilter] = useState('all')
-  const [operators, setOperators] = useState([])
+  const [correlationId, setCorrelationId] = useState('')
   const [busyId, setBusyId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     setError('')
-    const operatorId = isCloudAdmin && operatorFilter !== 'all' ? operatorFilter : undefined
-    const [logsRes, incidentsRes, operatorsRes] = await Promise.all([
-      listOperationalLogs({ severity, route, q, operatorId }),
-      listPlatformIncidents({ operatorId }),
-      isCloudAdmin ? listOperators() : Promise.resolve({ data: { operators: [] } }),
+    const [logsRes, incidentsRes] = await Promise.all([
+      listOperationalLogs({ severity, route, q, correlationId: correlationId.trim().toLowerCase() }),
+      listPlatformIncidents({}),
     ])
     if (logsRes.error) {
       setError(logsRes.error)
@@ -74,9 +72,8 @@ export default function ServiceLogsPage() {
     } else {
       setIncidents(incidentsRes.data?.incidents || [])
     }
-    setOperators(operatorsRes.data?.operators || [])
     setLoading(false)
-  }, [isCloudAdmin, operatorFilter, q, route, severity])
+  }, [correlationId, q, route, severity])
 
   useEffect(() => {
     load()
@@ -135,24 +132,14 @@ export default function ServiceLogsPage() {
             onChange={(event) => setQ(event.target.value)}
             sx={{ minWidth: 200 }}
           />
-          {isCloudAdmin ? (
-            <TextField
-              select
-              size="small"
-              label="Operator"
-              value={operatorFilter}
-              onChange={(event) => setOperatorFilter(event.target.value)}
-              sx={{ minWidth: 220 }}
-              data-testid="service-logs-operator"
-            >
-              <MenuItem value="all">All operators</MenuItem>
-              {operators.map((row) => (
-                <MenuItem key={row.operatorId} value={row.operatorId}>
-                  {row.name || row.operatorId}
-                </MenuItem>
-              ))}
-            </TextField>
-          ) : null}
+          <TextField
+            size="small"
+            label="Reference (correlation ID)"
+            value={correlationId}
+            onChange={(event) => setCorrelationId(event.target.value)}
+            sx={{ minWidth: 260 }}
+            inputProps={{ 'data-testid': 'service-logs-correlation' }}
+          />
           <Button variant="outlined" onClick={load} disabled={loading}>
             Refresh
           </Button>
@@ -195,7 +182,7 @@ export default function ServiceLogsPage() {
                     <TableCell>{incident.count || 1}</TableCell>
                     <TableCell>{formatWhen(incident.lastAt || incident.openedAt)}</TableCell>
                     <TableCell>
-                      {incident.status === 'open' ? (
+                      {incident.status === 'open' && canAck ? (
                         <Button
                           size="small"
                           disabled={busyId === incident.incidentId}

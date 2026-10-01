@@ -37,6 +37,7 @@ export function createCloudFixture() {
       enrollmentState: 'active',
       ageAttested: true,
       safetyProfile: { heightCm: 178, weightKg: 72, strideCm: 75 },
+      dateOfBirth: '1990-01-01',
     },
     {
       userId: 'user-demo-002',
@@ -45,6 +46,7 @@ export function createCloudFixture() {
       enrollmentState: 'pending',
       ageAttested: true,
       safetyProfile: { heightCm: 170, weightKg: 68, strideCm: 70 },
+      dateOfBirth: '1992-06-01',
     },
   ];
 
@@ -501,6 +503,10 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       if (operatorId && operatorId !== 'all') {
         entries = entries.filter((entry) => entry.operatorId === operatorId);
       }
+      const correlationId = url.searchParams.get('correlationId');
+      if (correlationId) {
+        entries = entries.filter((entry) => entry.correlationId === correlationId);
+      }
       return json({
         message: 'Operational logs',
         entries,
@@ -798,6 +804,9 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       if (!body.computeSerialNumber) {
         return json({ error: 'computeSerialNumber is required (ASSY-COMPUTE unique serial)' }, 400);
       }
+      if (!body.commissioning?.goldenImageId || !body.commissioning?.selfTest) {
+        return json({ error: 'commissioning.goldenImageId is required', code: 'COMMISSIONING_INCOMPLETE' }, 400);
+      }
       const instance = {
         instanceId: 'instance-new',
         model: body.model,
@@ -866,6 +875,19 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path.startsWith('/updates/check')) {
       return json({ updateAvailable: true, latestVersion: '1.1', currentVersion: '1.0' });
+    }
+    if (path === '/updates/emergency-patch' && method === 'POST') {
+      const body = route.request().postDataJSON();
+      if (!body.reason || !body.targetVersion) {
+        return json({ error: 'reason is required', code: 'EMERGENCY_PATCH_REASON_REQUIRED' }, 400);
+      }
+      if (!body.instanceId && !body.venueId && body.fleetScopeConfirmed !== true) {
+        return json(
+          { error: 'fleet scope confirmation required', code: 'FLEET_SCOPE_CONFIRMATION_REQUIRED' },
+          400,
+        );
+      }
+      return json({ message: 'Emergency patch queued', queuedCount: body.instanceId ? 1 : 2 }, 202);
     }
     if (path === '/reservations' && method === 'GET') {
       return json({ reservations: fixture.reservations });

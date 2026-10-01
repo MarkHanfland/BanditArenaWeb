@@ -43,6 +43,8 @@ import {
   renewLicense,
   revokeLicense,
 } from '../../api/cloud'
+import { useAuth } from '../../auth/useAuth'
+import { cloudCapabilities } from '../../auth/rolePermissions'
 
 function licenseColor(status) {
   if (status === 'active') return 'success'
@@ -66,8 +68,22 @@ function typeColor(t) {
   return 'default'
 }
 
+/** Commerce tabs and the FR-SW-AUTH-010 side each one calls. */
+function visibleTabs(caps) {
+  return [
+    { value: 'offerings', label: 'Offerings', show: true },
+    { value: 'quotes', label: 'Quotes', show: caps.venueAdmin },
+    { value: 'models', label: 'Models & BOM', show: true },
+    { value: 'licensing', label: 'Licensing', show: caps.fleetAdmin },
+    { value: 'cycles', label: 'Cycles', show: caps.cloudAdmin },
+    { value: 'revenue', label: 'Revenue', show: caps.cloudAdmin },
+  ].filter((t) => t.show)
+}
+
 export default function BillingPage() {
-  const [tab, setTab] = useState('offerings')
+  const { user } = useAuth()
+  const tabs = visibleTabs(cloudCapabilities(user))
+  const [tab, setTab] = useState(tabs[0]?.value || 'offerings')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -283,12 +299,9 @@ export default function BillingPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
-        <Tab label="Offerings" value="offerings" data-testid="commerce-tab-offerings" />
-        <Tab label="Quotes" value="quotes" data-testid="commerce-tab-quotes" />
-        <Tab label="Models & BOM" value="models" data-testid="commerce-tab-models" />
-        <Tab label="Licensing" value="licensing" data-testid="commerce-tab-licensing" />
-        <Tab label="Cycles" value="cycles" data-testid="commerce-tab-cycles" />
-        <Tab label="Revenue" value="revenue" data-testid="commerce-tab-revenue" />
+        {tabs.map((t) => (
+          <Tab key={t.value} label={t.label} value={t.value} data-testid={`commerce-tab-${t.value}`} />
+        ))}
       </Tabs>
 
       {!loading && tab === 'offerings' && (

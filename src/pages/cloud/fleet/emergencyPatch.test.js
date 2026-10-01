@@ -24,6 +24,7 @@ test('device and venue patches send without a second confirmation', () => {
     reason: 'hotfix',
   })
   assert.equal(venue.send, true)
+  assert.equal(venue.route, '/updates/emergency-patch')
   assert.equal(venue.payload.venueId, 'venue-1')
   assert.equal(venue.payload.fleetScopeConfirmed, undefined)
 })
@@ -45,7 +46,7 @@ test('tenant-wide patch is not sent until fleet scope is confirmed', () => {
     fleetScopeConfirmed: true,
   })
   assert.equal(sent.send, true)
-  assert.equal(sent.route, '/admin/firmware-push')
+  assert.equal(sent.route, '/updates/emergency-patch')
   assert.equal(sent.payload.fleetScopeConfirmed, true)
   assert.equal(sent.payload.venueId, undefined)
   assert.equal(sent.payload.instanceId, undefined)

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Box, Paper, Typography } from '@mui/material'
+import { Box, Button, Paper, Typography } from '@mui/material'
 import {
   getServicesStatus,
   getTelemetryCurrent,
@@ -131,7 +131,7 @@ function SessionStat({ label, value, color, testId }) {
  * Page-level device status band: player controls first, then live telemetry.
  */
 export default function DeviceStatusBand({ deviceOnline = true }) {
-  const { phase, formattedElapsed, statusNotice } = usePlayerSession()
+  const { phase, formattedElapsed, statusNotice, session, resumePlayer } = usePlayerSession()
   const [treadSpeed, setTreadSpeed] = useState(0)
   const [avatarSpeed, setAvatarSpeed] = useState(0)
   const [operatingState, setOperatingState] = useState(null)
@@ -224,6 +224,11 @@ export default function DeviceStatusBand({ deviceOnline = true }) {
           <Typography variant="body2" color="warning.main" sx={{ fontWeight: 600 }}>
             {statusNotice}
           </Typography>
+          {session?.pendingRestart ? (
+            <Button size="small" data-testid="session-resume" onClick={() => resumePlayer()} sx={{ ml: 1 }}>
+              Confirm restart
+            </Button>
+          ) : null}
         </Box>
       ) : null}
       <Paper

@@ -3,7 +3,8 @@ import { Authenticator, ThemeProvider, useAuthenticator } from '@aws-amplify/ui-
 import { Hub } from 'aws-amplify/utils'
 import '@aws-amplify/ui-react/styles.css'
 import './auth-overrides.css'
-import { Box, Button, CircularProgress, Typography } from '@mui/material'
+import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material'
+import { attemptOfflineSignIn } from '../session/sessionStartGate'
 import { banditAuthTheme } from './banditAuthTheme'
 import { banditAuthenticatorComponents } from './banditAuthenticatorComponents'
 import {
@@ -246,6 +247,45 @@ export function BanditLocalBypassShell({ onEnter, isEntering = false }) {
   )
 }
 
+function OfflinePinPanel() {
+  const offer = new URLSearchParams(window.location.search).get('offline') === '1'
+    || (typeof navigator !== 'undefined' && navigator.onLine === false)
+  const [username, setUsername] = useState('')
+  const [pin, setPin] = useState('')
+  const [note, setNote] = useState('')
+  if (!offer) return null
+  function submit(event) {
+    event.preventDefault()
+    const raw = sessionStorage.getItem('bandit-offline-credential')
+    if (!raw) {
+      setNote('Set a device PIN while online first')
+      return
+    }
+    const credential = JSON.parse(raw)
+    const result = attemptOfflineSignIn({ credential, pin, nowMs: Date.now() })
+    sessionStorage.setItem('bandit-offline-credential', JSON.stringify(result.credential))
+    if (!result.allow) {
+      setNote(result.message)
+      return
+    }
+    sessionStorage.setItem('bandit-offline-session', JSON.stringify({
+      username,
+      roles: result.roles,
+      expiresAtMs: result.expiresAtMs,
+    }))
+    setNote('Offline sign-in accepted')
+  }
+  return (
+    <Box component="form" onSubmit={submit} sx={{ mt: 2, display: 'grid', gap: 1 }} data-testid="offline-pin-panel">
+      <Typography variant="body2">Device PIN</Typography>
+      <TextField size="small" label="Username" value={username} onChange={(event) => setUsername(event.target.value)} inputProps={{ 'data-testid': 'offline-pin-username' }} />
+      <TextField size="small" label="PIN" type="password" value={pin} onChange={(event) => setPin(event.target.value)} inputProps={{ 'data-testid': 'offline-pin', inputMode: 'numeric' }} />
+      <Button type="submit" variant="outlined" data-testid="offline-pin-submit">Sign in with device PIN</Button>
+      {note ? <Typography variant="caption" data-testid="offline-pin-note">{note}</Typography> : null}
+    </Box>
+  )
+}
+
 function BrandedAuthenticator() {
   const rememberedUsername = useMemo(() => {
     initPreferRememberFromStorage()
@@ -270,6 +310,7 @@ function BrandedAuthenticator() {
           }}
         />
       </ThemeProvider>
+      <OfflinePinPanel />
     </Box>
   )
 }

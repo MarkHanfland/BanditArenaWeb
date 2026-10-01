@@ -58,27 +58,9 @@ test('SW-052: cloud admin creates an operator and a venue owned by a customer', 
   await expect(venueRow.getByText('Bandit Lab Facilities')).toBeVisible();
 });
 
-test('SW-052: venue admin can open accounts but customer create is rejected', async ({ page }) => {
+test('SW-052 / AUTH-010: venue admin does not see Customers / Operators / Venues', async ({ page }) => {
   await mockCloudApi(page);
-  await page.route('**/api/customers', async (route) => {
-    if (route.request().method() === 'POST') {
-      return route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'Cloud administrator required',
-          code: 'CLOUD_ADMIN_REQUIRED',
-        }),
-      });
-    }
-    return route.fallback();
-  });
-
   await signInAsVenueAdmin(page);
-  await openMenuItem(page, 'business', 'menu-accounts');
-  await expect(page.getByText('Bandit Lab Facilities')).toBeVisible();
-  await page.getByTestId('accounts-name').fill('Should Not Create');
-  await page.getByTestId('accounts-create').click();
-  await expect(page.getByTestId('accounts-message')).toContainText('Cloud administrator required');
-  await expect(page.getByText('Should Not Create')).toHaveCount(0);
+  await expect(page.getByTestId('menu-group-toggle-business')).toHaveCount(0);
+  await expect(page.getByTestId('menu-accounts')).toHaveCount(0);
 });

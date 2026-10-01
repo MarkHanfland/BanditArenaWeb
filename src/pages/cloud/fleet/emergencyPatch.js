@@ -40,7 +40,7 @@ export function planEmergencyPatch({
     return {
       send: true,
       status: 202,
-      route: '/admin/firmware-push',
+      route: '/updates/emergency-patch',
       payload: { venueId, targetVersion: version, reason: auditReason },
     }
   }
@@ -56,7 +56,7 @@ export function planEmergencyPatch({
     return {
       send: true,
       status: 202,
-      route: '/admin/firmware-push',
+      route: '/updates/emergency-patch',
       payload: {
         targetVersion: version,
         reason: auditReason,

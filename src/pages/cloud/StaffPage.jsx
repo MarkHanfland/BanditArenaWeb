@@ -16,6 +16,8 @@ import {
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
 import { assignVenueRole, getOperatorMe, listVenueRoles, listVenues, unassignVenueRole } from '../../api/cloud'
+import { useAuth } from '../../auth/useAuth'
+import { extractGroupsFromUser } from '../../auth/rolePermissions'
 
 const STAFF_ROLES = [
   { id: 'bandit-operator', label: 'Operator' },
@@ -24,6 +26,9 @@ const STAFF_ROLES = [
 ]
 
 export default function StaffPage() {
+  const { user } = useAuth()
+  // FR-SW-SVC-003: staff role assignment is Cloud Administrator until AUTH-013 delegation.
+  const canAssign = extractGroupsFromUser(user).includes('bandit-cloud-admin')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [venues, setVenues] = useState([])
@@ -103,6 +108,11 @@ export default function StaffPage() {
           {message}
         </Alert>
       )}
+      {!loading && !error && !canAssign && (
+        <Alert severity="info" sx={{ mb: 2 }} data-testid="staff-read-only">
+          Only a Cloud Administrator can assign or remove staff roles.
+        </Alert>
+      )}
       {!loading && !error && (
         <Stack spacing={2}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
@@ -127,6 +137,7 @@ export default function StaffPage() {
               sx={{ minWidth: 260 }}
               value={principal}
               onChange={(e) => setPrincipal(e.target.value)}
+              disabled={!canAssign}
               inputProps={{ 'data-testid': 'staff-principal' }}
             />
             <TextField
@@ -136,6 +147,7 @@ export default function StaffPage() {
               sx={{ minWidth: 180 }}
               value={role}
               onChange={(e) => setRole(e.target.value)}
+              disabled={!canAssign}
               inputProps={{ 'data-testid': 'staff-role' }}
             >
               {STAFF_ROLES.map((entry) => (
@@ -147,7 +159,7 @@ export default function StaffPage() {
             <Button
               variant="contained"
               onClick={handleAssign}
-              disabled={!venueId || !principal.trim()}
+              disabled={!canAssign || !venueId || !principal.trim()}
               data-testid="staff-assign"
             >
               Assign role
@@ -181,6 +193,7 @@ export default function StaffPage() {
                     <Button
                       size="small"
                       color="error"
+                      disabled={!canAssign}
                       onClick={async () => {
                         setMessage('')
                         const { error: apiError } = await unassignVenueRole(

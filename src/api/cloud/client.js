@@ -39,19 +39,11 @@ export function setCloudAuthToken(token) {
 
 
 
+/** Kept for callers; the cloud takes the tenant from the token, never a header (FR-SW-AUTH-010). */
+
 export function setCloudOperatorId(operatorId) {
 
   _operatorId = operatorId || null
-
-  if (_operatorId) {
-
-    cloudApi.defaults.headers.common['X-Bandit-Operator-Id'] = _operatorId
-
-  } else {
-
-    delete cloudApi.defaults.headers.common['X-Bandit-Operator-Id']
-
-  }
 
 }
 
@@ -79,11 +71,9 @@ cloudApi.interceptors.request.use((config) => {
 
   }
 
-  if (_operatorId) {
+  // TR-OBS-002: one W3C trace per request; the cloud returns its id as correlationId.
 
-    config.headers['X-Bandit-Operator-Id'] = _operatorId
-
-  }
+  config.headers.traceparent = newTraceparent()
 
   return config
 
@@ -95,6 +85,28 @@ export default cloudApi
 
 
 
+function newTraceparent() {
+
+  const hex = (bytes) => Array.from(crypto.getRandomValues(new Uint8Array(bytes)), (b) => b.toString(16).padStart(2, '0')).join('')
+
+  return `00-${hex(16)}-${hex(8)}-01`
+
+}
+
+/** TR-OBS-002: the correlation id of a failed call, from the body, header, or our traceparent. */
+
+export function correlationIdOf(error) {
+
+  const fromBody = error.response?.data?.correlationId
+
+  const fromHeader = error.response?.headers?.['x-correlation-id']
+
+  const sent = String(error.config?.headers?.traceparent || '').split('-')[1]
+
+  return fromBody || fromHeader || sent || null
+
+}
+
 async function request(promiseFactory) {
 
   try {
@@ -105,11 +117,19 @@ async function request(promiseFactory) {
 
   } catch (error) {
 
+    const message = error.response?.data?.message || error.response?.data?.error || error.message
+
+    const correlationId = correlationIdOf(error)
+
     return {
 
       data: null,
 
-      error: error.response?.data?.message || error.response?.data?.error || error.message,
+      // TR-OBS-002: every console error shows "Reference: <id>" for support lookup.
+
+      error: correlationId ? `${message} Reference: ${correlationId}` : message,
+
+      correlationId,
 
     }
 
@@ -384,7 +404,7 @@ export async function listSessions(params = {}) {
 
 export async function listOperationalLogs(params = {}) {
   const qs = new URLSearchParams()
-  for (const key of ['severity', 'from', 'to', 'route', 'q', 'operatorId']) {
+  for (const key of ['severity', 'from', 'to', 'route', 'q', 'correlationId']) {
     if (params[key] != null && params[key] !== '') qs.set(key, String(params[key]))
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : ''

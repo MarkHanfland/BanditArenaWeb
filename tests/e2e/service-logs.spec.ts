@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signInAsCloudAdmin, signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi } from '../helpers/mockApis';
-import { expandMenuGroup, openMenuItem } from '../helpers/menuNav';
+import { openMenuItem } from '../helpers/menuNav';
 
 function opsFixture() {
   const fixture = createCloudFixture();
@@ -14,6 +14,7 @@ function opsFixture() {
       route: 'GET /media',
       message: 'INTERNAL: boom',
       operatorId: 'operator-demo-001',
+      correlationId: '4bf92f3577b34da6a3ce929d0e0e4736',
     },
     {
       logId: 'log-e2e-002',
@@ -78,26 +79,24 @@ test('SW-093: fleet admin views service logs and acknowledges an incident', asyn
   );
 });
 
-test('SW-093: cloud admin can filter service logs across operators', async ({ page }) => {
+test('TR-OBS-002 / SVC-018: cloud admin finds a log by its reference and cannot acknowledge', async ({ page }) => {
   const fixture = opsFixture();
   await mockCloudApi(page, fixture);
   await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'administration', 'menu-service-logs');
   await expect(page.getByTestId('service-logs-page')).toBeVisible();
-  await expect(page.getByTestId('service-logs-operator')).toBeVisible();
-  await expect(page.getByTestId('service-logs-table')).toContainText('INTERNAL_OTHER');
-  await expect(page.getByTestId('service-logs-table')).toContainText('operator-other-001');
+  await expect(page.getByTestId('service-logs-operator')).toHaveCount(0);
+  await expect(page.getByTestId('service-incident-ack-inc-e2e-001')).toHaveCount(0);
 
-  await page.getByTestId('service-logs-operator').click();
-  await page.getByRole('option', { name: 'Other Operator' }).click();
-  await expect(page.getByTestId('service-logs-table')).toContainText('INTERNAL_OTHER');
-  await expect(page.getByTestId('service-logs-table')).not.toContainText('INTERNAL: boom');
+  await page.getByTestId('service-logs-correlation').fill('4bf92f3577b34da6a3ce929d0e0e4736');
+  await expect(page.getByTestId('service-logs-table')).toContainText('INTERNAL: boom');
+  await expect(page.getByTestId('service-logs-table')).not.toContainText('INTERNAL_OTHER');
 });
 
 test('SW-093: venue admin cannot open service logs', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
-  await expandMenuGroup(page, 'administration');
+  await expect(page.getByTestId('menu-group-toggle-administration')).toHaveCount(0);
   await expect(page.getByTestId('menu-service-logs')).toHaveCount(0);
 });

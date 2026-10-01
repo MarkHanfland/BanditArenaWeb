@@ -44,8 +44,9 @@ test('venue admin can open cloud pillar pages from the sidebar', async ({ page }
   await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByRole('heading', { name: 'Enrollment / Check-In' })).toBeVisible();
 
-  await openMenuItem(page, 'device-fleet', 'menu-fleet');
-  await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
+  await openMenuItem(page, 'content', 'menu-media');
+  await expect(page.getByTestId('menu-media')).toBeVisible();
+  await expect(page.getByTestId('menu-group-toggle-device-fleet')).toHaveCount(0);
 });
 
 test('menu pillars are collapsible; only Local Device starts expanded', async ({ page }) => {
@@ -54,7 +55,7 @@ test('menu pillars are collapsible; only Local Device starts expanded', async ({
   await expect(page.getByTestId('menu-group-toggle-local')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.getByTestId('menu-dashboard')).toBeVisible();
 
-  for (const groupId of ['operations', 'device-fleet', 'content', 'business', 'analytics']) {
+  for (const groupId of ['operations', 'content']) {
     await expect(page.getByTestId(`menu-group-toggle-${groupId}`)).toHaveAttribute('aria-expanded', 'false');
   }
 
@@ -66,11 +67,12 @@ test('menu pillars are collapsible; only Local Device starts expanded', async ({
 
   await expandAllMenuGroups(page);
   await expect(page.getByTestId('menu-users')).toBeVisible();
-  await expect(page.getByTestId('menu-billing')).toBeVisible();
+  await expect(page.getByTestId('menu-billing')).toHaveCount(0);
   await expect(page.getByTestId('menu-sessions')).toBeVisible();
   await expect(page.getByTestId('menu-sessions')).toBeEnabled();
   await expect(page.getByTestId('menu-sessions')).toHaveAttribute('data-implemented', 'true');
-  await expect(page.getByTestId('menu-group-administration')).toBeVisible();
+  for (const groupId of ['device-fleet', 'business', 'analytics', 'administration']) {
+    await expect(page.getByTestId(`menu-group-toggle-${groupId}`)).toHaveCount(0);
+  }
   await expect(page.getByTestId('menu-service-logs')).toHaveCount(0);
-  await expect(page.getByTestId('menu-audit')).toBeDisabled();
 });

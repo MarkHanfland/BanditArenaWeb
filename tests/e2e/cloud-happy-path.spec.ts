@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
+import { signInAsCloudAdmin, signInAsFleetAdmin, signInAsVenueAdmin } from '../helpers/auth';
 import { createCloudFixture, mockCloudApi, mockConsoleApis } from '../helpers/mockApis';
 import { openMenuItem } from '../helpers/menuNav';
 
@@ -150,7 +150,7 @@ test('SW-089: media cover upload uses asset-upload-token and objectKey PATCH onl
 
 test('fleet register flow provisions a device', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
@@ -165,7 +165,7 @@ test('fleet register flow provisions a device', async ({ page }) => {
 
 test('fleet activate flow activates a provisioned device', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await page.getByTestId('fleet-row-i-provisioned').click();
@@ -190,7 +190,7 @@ test('reservation book flow confirms a slot and sets the next player', async ({ 
 
 test('staff assign role records a venue operator', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'operations', 'menu-staff');
   await expect(page.getByRole('heading', { name: 'Staff' })).toBeVisible();
@@ -202,7 +202,7 @@ test('staff assign role records a venue operator', async ({ page }) => {
 
 test('billing issue and revoke license', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'business', 'menu-billing');
   await expect(page.getByRole('heading', { name: 'Commerce' })).toBeVisible();
@@ -216,7 +216,7 @@ test('billing issue and revoke license', async ({ page }) => {
 
 test('commerce offerings BOM and revenue tabs', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'business', 'menu-billing');
   await expect(page.getByTestId('commerce-offerings-table')).toBeVisible();
@@ -234,7 +234,7 @@ test('commerce offerings BOM and revenue tabs', async ({ page }) => {
 
 test('commerce spare order submits for a device', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'business', 'menu-billing');
   await page.getByTestId('commerce-create-order').click();
@@ -247,7 +247,7 @@ test('commerce spare order submits for a device', async ({ page }) => {
 test('commerce multi-unit quote does not create an order', async ({ page }) => {
   const fixture = createCloudFixture();
   await mockCloudApi(page, fixture);
-  await signInAsVenueAdmin(page);
+  await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'business', 'menu-billing');
   await page.getByTestId('commerce-tab-quotes').click();
@@ -266,7 +266,7 @@ test('commerce multi-unit quote does not create an order', async ({ page }) => {
 test('billing close cycle and reconcile', async ({ page }) => {
   const fixture = createCloudFixture();
   await mockCloudApi(page, fixture);
-  await signInAsVenueAdmin(page);
+  await signInAsCloudAdmin(page);
 
   await openMenuItem(page, 'business', 'menu-billing');
   await page.getByTestId('commerce-tab-cycles').click();
@@ -281,7 +281,7 @@ test('billing close cycle and reconcile', async ({ page }) => {
 
 test('analytics page shows summary cards', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'analytics', 'menu-usage');
   await expect(page.getByRole('heading', { name: 'Analytics', exact: true })).toBeVisible();
@@ -305,19 +305,29 @@ test('SW-060: fleet admin sees live fleet analytics', async ({ page }) => {
   await expect(page.getByTestId('analytics-fleet-venue-venue-demo-001')).toBeVisible();
 });
 
-test('SW-090: analytics alert ack and notification history', async ({ page }) => {
+test('SW-090: fleet admin acknowledges an analytics alert', async ({ page }) => {
   const fixture = createCloudFixture();
   await mockCloudApi(page, fixture);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'analytics', 'menu-usage');
   await expect(page.getByTestId('analytics-alert-alert-001')).toBeVisible();
   await expect(page.getByText('Device i1 is offline')).toBeVisible();
+  await expect(page.getByTestId('analytics-notifications')).toHaveCount(0);
 
   await page.getByTestId('ack-alert-alert-001').click();
   await expect(page.getByTestId('analytics-action-message')).toContainText(/Acknowledged|acknowledged/i);
   await expect(page.getByTestId('analytics-alerts-empty')).toBeVisible();
   expect(fixture.alerts.find((a) => a.alertId === 'alert-001')?.status).toBe('acknowledged');
+});
+
+test('SW-090: cloud admin sends notifications and sees history', async ({ page }) => {
+  const fixture = createCloudFixture();
+  await mockCloudApi(page, fixture);
+  await signInAsCloudAdmin(page);
+
+  await openMenuItem(page, 'analytics', 'menu-usage');
+  await expect(page.getByTestId('analytics-alerts')).toHaveCount(0);
 
   await page.getByTestId('send-session-reminder').click();
   await expect(page.getByTestId('notification-notif-1')).toBeVisible();
@@ -331,7 +341,7 @@ test('SW-090: analytics alert ack and notification history', async ({ page }) =>
 
 test('maintenance records an event for the selected device', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByRole('heading', { name: 'Fleet' })).toBeVisible();
@@ -345,7 +355,7 @@ test('maintenance records an event for the selected device', async ({ page }) =>
 
 test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) => {
   await mockCloudApi(page);
-  await signInAsVenueAdmin(page);
+  await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
   await expect(page.getByTestId('fleet-map')).toBeVisible();
@@ -356,4 +366,27 @@ test('fleet demo shows Neon Circuit map and financial rollup', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Horizon Parks' })).toBeVisible();
   await page.getByTestId('fleet-tab-financial').click();
   await expect(page.getByTestId('device-financials')).toBeVisible();
+});
+
+test('TR-OBS-002: a failed cloud call shows its correlation reference', async ({ page }) => {
+  await mockCloudApi(page);
+  let traceparent = '';
+  await page.route('**/api/users', async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    traceparent = route.request().headers()['traceparent'] || '';
+    return route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: 'Operator data client unavailable',
+        message: 'Operator data client unavailable',
+        code: 'OPERATOR_DB_UNAVAILABLE',
+        correlationId: '4bf92f3577b34da6a3ce929d0e0e4736',
+      }),
+    });
+  });
+  await signInAsVenueAdmin(page);
+  await openMenuItem(page, 'operations', 'menu-users');
+  await expect(page.getByText('Reference: 4bf92f3577b34da6a3ce929d0e0e4736').first()).toBeVisible();
+  expect(traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
 });

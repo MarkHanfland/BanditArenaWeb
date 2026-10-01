@@ -99,6 +99,8 @@ export default function FleetPage({ initialTab = 'overview' }) {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [patchOpen, setPatchOpen] = useState(false)
   const [computeSerialNumber, setComputeSerialNumber] = useState('')
+  const [goldenImageId, setGoldenImageId] = useState('golden-alpha-1')
+  const [selfTest, setSelfTest] = useState('pass')
   const [deviceModel, setDeviceModel] = useState('product-demo-treadmill')
   const [venueId, setVenueId] = useState('')
   const [buyerKind, setBuyerKind] = useState('operator')
@@ -217,6 +219,17 @@ export default function FleetPage({ initialTab = 'overview' }) {
       venueId,
       buyerKind,
       buyerCustomerId: buyerKind === 'customer' ? buyerCustomerId : undefined,
+      commissioning: {
+        goldenImageId: goldenImageId.trim(),
+        windowsVersion: '10.0.19045',
+        steamVrVersion: '2.8.8',
+        openXrVersion: '1.1.36',
+        banditArenaVersion: '1.2.0-alpha',
+        commissionedBy: 'fleet-admin',
+        commissionedAt: new Date().toISOString(),
+        serialBind: 'pass',
+        selfTest,
+      },
     })
     if (apiError) {
       showMessage(apiError, 'error')
@@ -514,6 +527,27 @@ export default function FleetPage({ initialTab = 'overview' }) {
               inputProps={{ 'data-testid': 'register-compute-serial' }}
             />
             <TextField
+              label="Golden image"
+              fullWidth
+              required
+              sx={{ mt: 2 }}
+              value={goldenImageId}
+              onChange={(e) => setGoldenImageId(e.target.value)}
+              inputProps={{ 'data-testid': 'register-golden-image' }}
+            />
+            <TextField
+              select
+              label="Commissioning self-test"
+              fullWidth
+              sx={{ mt: 2 }}
+              value={selfTest}
+              onChange={(e) => setSelfTest(e.target.value)}
+              inputProps={{ 'data-testid': 'register-self-test' }}
+            >
+              <MenuItem value="pass">pass</MenuItem>
+              <MenuItem value="fail">fail</MenuItem>
+            </TextField>
+            <TextField
               select
               label="Model"
               fullWidth
@@ -579,7 +613,12 @@ export default function FleetPage({ initialTab = 'overview' }) {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setRegisterOpen(false)}>Cancel</Button>
-            <Button variant="contained" onClick={handleProvision} data-testid="register-device-submit">
+            <Button
+              variant="contained"
+              onClick={handleProvision}
+              data-testid="register-device-submit"
+              disabled={!computeSerialNumber.trim() || !goldenImageId.trim()}
+            >
               Provision
             </Button>
           </DialogActions>

@@ -4,12 +4,14 @@ import { expandAllMenuGroups } from '../helpers/menuNav';
 import { mockConsoleApis } from '../helpers/mockApis';
 
 type RoleCase = {
-  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin';
+  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin';
   expected: string[];
   expectedDisabled: string[];
   notExpected: string[];
 };
 
+// Cloud menus follow FR-SW-AUTH-010: business pages (Cloud Administrator ⊇ Venue
+// Administrator) and fleet pages (Fleet Administrator ⊇ Field Service Technician).
 const roleCases: RoleCase[] = [
   {
     roleId: 'operator',
@@ -24,7 +26,6 @@ const roleCases: RoleCase[] = [
       'menu-media',
       'menu-staff',
       'menu-sessions',
-      'menu-maintenance',
       'menu-group-operations',
       'menu-group-device-fleet',
       'menu-group-administration',
@@ -32,31 +33,21 @@ const roleCases: RoleCase[] = [
   },
   {
     roleId: 'technician',
-    expected: [
-      'menu-dashboard',
-      'menu-services',
-      'menu-config',
-      'menu-media',
-      'menu-fleet',
-      'menu-usage',
-      'menu-group-device-fleet',
-      'menu-group-content',
-      'menu-group-analytics',
-    ],
-    expectedDisabled: [
-      'menu-firmware',
-      'menu-diagnostics',
-      'menu-media-uploads',
-      'menu-device-analytics',
-    ],
+    expected: ['menu-dashboard', 'menu-services', 'menu-config', 'menu-group-device-fleet'],
+    expectedDisabled: ['menu-diagnostics', 'menu-support'],
     notExpected: [
+      'menu-fleet',
+      'menu-firmware',
+      'menu-media',
+      'menu-usage',
       'menu-billing',
       'menu-users',
       'menu-staff',
       'menu-sessions',
-      'menu-maintenance',
       'menu-group-operations',
+      'menu-group-content',
       'menu-group-business',
+      'menu-group-analytics',
       'menu-group-administration',
     ],
   },
@@ -72,47 +63,56 @@ const roleCases: RoleCase[] = [
       'menu-users',
       'menu-reservations',
       'menu-staff',
-      'menu-usage',
-      'menu-fleet',
-      'menu-billing',
       'menu-sessions',
       'menu-group-operations',
-      'menu-group-device-fleet',
       'menu-group-content',
+    ],
+    expectedDisabled: ['menu-notifications', 'menu-media-uploads', 'menu-session-recordings'],
+    notExpected: [
+      'menu-fleet',
+      'menu-usage',
+      'menu-billing',
+      'menu-accounts',
+      'menu-service-logs',
+      'menu-group-device-fleet',
       'menu-group-business',
       'menu-group-analytics',
       'menu-group-administration',
     ],
-    expectedDisabled: [
-      'menu-notifications',
-      'menu-firmware',
-      'menu-diagnostics',
-      'menu-support',
-      'menu-network',
-      'menu-media-uploads',
-      'menu-session-recordings',
-      'menu-subscriptions',
-      'menu-pricing',
-      'menu-device-analytics',
-      'menu-experience-analytics',
-      'menu-revenue-analytics',
-      'menu-roles',
-      'menu-integrations',
-      'menu-branding',
-      'menu-audit',
-    ],
-    notExpected: ['menu-maintenance', 'menu-service-logs'],
   },
   {
     roleId: 'fleetAdmin',
     expected: [
       'menu-dashboard',
-      'menu-sessions',
+      'menu-fleet',
+      'menu-usage',
+      'menu-billing',
       'menu-service-logs',
+      'menu-group-device-fleet',
+      'menu-group-analytics',
       'menu-group-administration',
     ],
-    expectedDisabled: ['menu-roles', 'menu-audit'],
-    notExpected: ['menu-maintenance'],
+    expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles', 'menu-audit'],
+    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-group-operations'],
+  },
+  {
+    roleId: 'cloudAdmin',
+    expected: [
+      'menu-dashboard',
+      'menu-users',
+      'menu-sessions',
+      'menu-media',
+      'menu-billing',
+      'menu-accounts',
+      'menu-usage',
+      'menu-service-logs',
+      'menu-group-operations',
+      'menu-group-content',
+      'menu-group-business',
+      'menu-group-administration',
+    ],
+    expectedDisabled: ['menu-subscriptions', 'menu-roles', 'menu-audit'],
+    notExpected: ['menu-fleet', 'menu-group-device-fleet'],
   },
 ];
 

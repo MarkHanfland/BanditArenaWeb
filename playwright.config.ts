@@ -17,6 +17,8 @@ export default defineConfig({
     command: 'npm run build && npx vite preview --host 127.0.0.1 --port 4174',
     port: 4174,
     reuseExistingServer: false,
+    // A cold `vite build` takes about a minute; the 60 s default fails intermittently.
+    timeout: 180_000,
     env: {
       VITE_E2E_AUTH_BYPASS: 'true',
     },

@@ -7,10 +7,13 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { endSession, getCurrentSession, startSession } from '../api/device'
-import { createSession, closeSession, listMedia, listUsers } from '../api/cloud'
+import { endSession, getCurrentSession, resumeSession, startSession } from '../api/device'
+import { CORE_LIMITS, ageYears, evaluateCloudStart, evaluateEligibility, profileFromUser } from './sessionStartGate'
+import { listCatalogModels, listMedia, listUsers } from '../api/cloud'
+
+/** Treadmill model whose published eligibility limits this console applies (FR-SW-SVC-017). */
+const DEVICE_PRODUCT_ID = import.meta.env?.VITE_DEVICE_PRODUCT_ID || 'bandit-arena-core'
 import { readLastPlayers, rememberPlayer } from './lastPlayers'
-import { resolveSessionDeviceContext } from './sessionDeviceContext'
 import { formatSessionClock, sessionPhaseFrom, SESSION_PHASE, SESSION_PHASE_LABEL } from './playerSessionPhase'
 
 const PlayerSessionContext = createContext(null)
@@ -22,13 +25,12 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
   const [selectedMediaId, setSelectedMediaId] = useState('')
   const [lastPlayers, setLastPlayers] = useState(readLastPlayers)
   const [selected, setSelected] = useState(null)
+  const [eligibilityLimits, setEligibilityLimits] = useState(CORE_LIMITS)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [nowMs, setNowMs] = useState(() => Date.now())
   const clientStartedAtRef = useRef(null)
   const pollGenerationRef = useRef(0)
-  /** Cloud Session History record opened alongside the device run (admin Cognito). */
-  const cloudSessionIdRef = useRef(null)
 
   const refreshSession = useCallback(async () => {
     const generation = pollGenerationRef.current
@@ -38,6 +40,13 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     }
     if (data) {
       setSession(data)
+      if (data.pendingRestart) {
+        setMessage('Player stop — the tread stays at zero until restart is confirmed.')
+      } else if (data.sessionEndCause === 'tread_exit') {
+        setMessage('The player left the tread. The session ended.')
+      } else if (data.sessionEndCause === 'cloud_loss' || data.sessionEndCause === 'cloud_unavailable') {
+        setMessage('cloud unavailable')
+      }
     }
   }, [])
 
@@ -62,6 +71,18 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
           ? ''
           : prev,
       )
+    }
+  }, [])
+
+  // FR-SW-SAFE-010 / SVC-017: use the model's published limits; the device stays authoritative.
+  useEffect(() => {
+    let active = true
+    listCatalogModels().then(({ data }) => {
+      const model = (data?.products || []).find((p) => p.productId === DEVICE_PRODUCT_ID)
+      if (active && model?.eligibility) setEligibilityLimits({ ...CORE_LIMITS, ...model.eligibility })
+    })
+    return () => {
+      active = false
     }
   }, [])
 
@@ -191,25 +212,39 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     return ''
   }, [busy, message, selectedMediaIsTest, sessionActive, trackingBlocked])
 
-  const startForPlayer = useCallback(async ({ userId, displayName, ageAttested = false, mediaId }) => {
+  const startForPlayer = useCallback(async ({ userId, displayName, ageAttested = false, mediaId, user, cloudReachable = true, measuredHeightM = null }) => {
     if (!mediaId) {
       setMessage('Select a media title before starting a session')
       return false
     }
-    setBusy(true)
-    setMessage('')
-    pollGenerationRef.current += 1
     const media = mediaOptions.find((item) => item.mediaId === mediaId)
     const isTestMedia = Boolean(
       media?.testMedia
       || media?.mediaCategory === 'test_simulation'
       || String(mediaId).startsWith('media-sim-'),
     )
+    if (!isTestMedia) {
+      const decision = user
+        ? evaluateCloudStart({
+          cloudReachable,
+          eligibility: evaluateEligibility({ ...profileFromUser(user), measuredHeightM, limits: eligibilityLimits }),
+        })
+        : { allow: false, message: 'Profile is missing height, weight, or date of birth' }
+      if (!decision.allow) {
+        setMessage(decision.message)
+        return { ok: false, message: decision.message }
+      }
+    }
+    setBusy(true)
+    setMessage('')
+    pollGenerationRef.current += 1
+    const profile = user ? { ...profileFromUser(user), ageYears: ageYears(user.dateOfBirth), cloudReachable, measuredHeightM } : null
     const { data, error } = await startSession({
       userId,
       displayName,
       ageAttested,
       mediaId,
+      profile,
       testMedia: isTestMedia,
       simulationMode: media?.simulationMode || (isTestMedia ? 'deterministic' : ''),
       deterministicConfig: media?.deterministicConfig || '',
@@ -223,32 +258,13 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       return false
     }
 
-    // Session History is cloud-backed. When the device already linked a cloud session
-    // (device cloud + identity), reuse it. Otherwise open a Cognito session record so
-    // lab runs still appear under Operations → Session History.
-    cloudSessionIdRef.current = null
-    let cloudOpenError = null
-    if (data?.cloudLinked && data?.sessionId) {
-      cloudSessionIdRef.current = data.sessionId
-    } else {
-      const deviceCtx = await resolveSessionDeviceContext({ deviceId: data?.deviceId })
-      const cloudOpen = await createSession({
-        userId,
-        mediaId,
-        banditProductId: 'product-demo-treadmill',
-        clientOpenKey: data?.sessionId || `console-${userId}-${Date.now()}`,
-        ...deviceCtx,
-      })
-      if (cloudOpen.error) {
-        cloudOpenError = cloudOpen.error
-        setMessage(
-          data?.cloudWarning
-            || `Device session started; Session History record failed: ${cloudOpen.error}`,
-        )
-      } else if (cloudOpen.data?.session?.sessionId) {
-        cloudSessionIdRef.current = cloudOpen.data.session.sessionId
-      }
-    }
+    // Session records are written by the device with its certificate (FR-SW-SVC-010,
+    // FR-SW-AUTH-010: Domain 10 writes are device only). The console never opens or
+    // closes a cloud session record itself.
+    const cloudOpenError = data?.cloudLinked
+      ? null
+      : 'This device did not record the session in the cloud; it will not appear in Session History.'
+    if (cloudOpenError) setMessage(data?.cloudWarning || cloudOpenError)
 
     pollGenerationRef.current += 1
     clientStartedAtRef.current = Number(data?.startedAt) || Date.now()
@@ -269,25 +285,44 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     setBusy(false)
     onSessionStarted?.()
     return true
-  }, [mediaOptions, onSessionStarted])
+  }, [eligibilityLimits, mediaOptions, onSessionStarted])
 
   const handleStart = useCallback(async () => {
     if (!selected?.userId) {
       return false
     }
+    // The header selection may hold only userId/displayName; the eligibility gate
+    // needs the enrolled record with its safety profile and date of birth.
+    const user = players.find((p) => p.userId === selected.userId) || selected
     return startForPlayer({
       userId: selected.userId,
       displayName: selected.displayName || selected.name || selected.email || selected.userId,
-      ageAttested: Boolean(selected.ageAttested),
+      ageAttested: Boolean(user.ageAttested ?? selected.ageAttested),
       mediaId: selectedMediaId,
+      user,
     })
-  }, [selected, selectedMediaId, startForPlayer])
+  }, [players, selected, selectedMediaId, startForPlayer])
+
+  const resumePlayer = useCallback(async () => {
+    const { data, error } = await resumeSession({
+      trackingOk: Boolean(session?.trackingReady),
+      upright: true,
+      inDeadZone: true,
+      confirmed: true,
+      cloudReachable: typeof navigator === 'undefined' ? true : navigator.onLine,
+    })
+    if (error) {
+      setMessage(error)
+      return
+    }
+    if (data) setSession(data)
+    setMessage(data?.pendingRestart ? 'Restart is not confirmed' : '')
+  }, [session])
 
   const handleEnd = useCallback(async () => {
     setBusy(true)
     setMessage('')
     pollGenerationRef.current += 1
-    const cloudSessionId = cloudSessionIdRef.current
     const { data, error } = await endSession()
     if (error) {
       setMessage(error)
@@ -295,13 +330,6 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       setSession(data)
       setSelected(null)
       clientStartedAtRef.current = null
-      if (cloudSessionId) {
-        const closed = await closeSession(cloudSessionId, {})
-        if (closed.error) {
-          setMessage(`Session ended on device; Session History close failed: ${closed.error}`)
-        }
-      }
-      cloudSessionIdRef.current = null
     }
     setBusy(false)
   }, [])
@@ -330,6 +358,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       elapsedSec,
       formattedElapsed: formatSessionClock(elapsedSec),
       startForPlayer,
+      resumePlayer,
       handleStart,
       handleEnd,
       loadPlayers,
@@ -355,6 +384,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
       phase,
       elapsedSec,
       startForPlayer,
+      resumePlayer,
       handleStart,
       handleEnd,
       loadPlayers,

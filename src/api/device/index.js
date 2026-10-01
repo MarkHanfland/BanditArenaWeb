@@ -19,6 +19,7 @@ export {
   pingDevice,
   getCurrentSession,
   startSession,
+  resumeSession,
   endSession,
 } from './treadmill'
 export { applyCameraSimulatorMediaMode } from './cameraSimulator'

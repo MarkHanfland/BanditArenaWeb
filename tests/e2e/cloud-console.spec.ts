@@ -1,11 +1,16 @@
 import { expect, test } from '@playwright/test';
-import { getTestAdministratorUser } from '../helpers/testCredentials';
+import { resolveE2eAdminUser } from '../helpers/auth';
 import { mockCloudApi } from '../helpers/mockApis';
 import { openMenuItem } from '../helpers/menuNav';
 
-test('cloud console Start Session creates a record and does not claim the belt started', async ({ page }) => {
+test('cloud console Start Session points to the treadmill and writes no session record (AUTH-010)', async ({ page }) => {
+  let sessionWrites = 0;
   await mockCloudApi(page);
-  const admin = getTestAdministratorUser('venueAdmin');
+  await page.route('**/api/sessions', async (route) => {
+    if (route.request().method() === 'POST') sessionWrites += 1;
+    return route.fallback();
+  });
+  const admin = resolveE2eAdminUser('venueAdmin');
   await page.goto('/?e2eAuthBypass=true&e2eCloudConsole=true');
   await page.getByTestId('login-username').fill(admin.username);
   await page.getByTestId('login-password').fill(admin.password);
@@ -15,9 +20,10 @@ test('cloud console Start Session creates a record and does not claim the belt s
 
   await openMenuItem(page, 'operations', 'menu-users');
   await expect(page.getByRole('heading', { name: 'Enrollment / Check-In' })).toBeVisible();
-  await expect(page.getByText(/Creating a cloud session record does not start the treadmill/)).toBeVisible();
+  await expect(page.getByText(/Sessions are started at the treadmill/)).toBeVisible();
   await page.getByTestId('start-session-user-demo-001').click();
   await expect(page.getByTestId('enrollment-message')).toContainText(
-    'Cloud session record session-new created. This does not start the treadmill.',
+    'Start the session at the treadmill. The device records it in Session History.',
   );
+  expect(sessionWrites).toBe(0);
 });

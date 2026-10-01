@@ -9,6 +9,8 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
+import { useAuth } from '../../auth/useAuth'
+import { cloudCapabilities } from '../../auth/rolePermissions'
 import {
   acknowledgeAlert,
   getAnalyticsSummary,
@@ -134,6 +136,10 @@ function FleetCard({ fleet, onOpenFleet }) {
 }
 
 export default function UsagePage() {
+  const { user } = useAuth()
+  // FR-SW-AUTH-010: analytics and alerts are Fleet Administrator (Domain 11);
+  // notifications are Cloud Administrator (Domain 14).
+  const caps = cloudCapabilities(user)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [summary, setSummary] = useState(null)
@@ -148,8 +154,8 @@ export default function UsagePage() {
 
   const refreshAlertsAndHistory = async () => {
     const [alertRes, notifRes] = await Promise.all([
-      listAlerts({ status: 'open' }),
-      listNotifications({}),
+      caps.fleetAdmin ? listAlerts({ status: 'open' }) : { data: null },
+      caps.cloudAdmin ? listNotifications({}) : { data: null },
     ])
     if (!alertRes.error) setAlerts(alertRes.data?.alerts || [])
     if (!notifRes.error) setNotifications(notifRes.data?.notifications || [])
@@ -158,10 +164,11 @@ export default function UsagePage() {
   useEffect(() => {
     let mounted = true
     ;(async () => {
+      const skip = Promise.resolve({ data: null })
       const [summaryRes, fleetRes, playerRes] = await Promise.all([
-        getAnalyticsSummary(),
-        getFleetAnalytics(),
-        getPlayerAnalytics('user-demo-001'),
+        caps.fleetAdmin ? getAnalyticsSummary() : skip,
+        caps.fleetAdmin ? getFleetAnalytics() : skip,
+        caps.fleetAdmin ? getPlayerAnalytics('user-demo-001') : skip,
       ])
       if (!mounted) return
       if (summaryRes.error) setError(summaryRes.error)
@@ -249,6 +256,7 @@ export default function UsagePage() {
         {error && <Alert severity="error">{error}</Alert>}
 
         <Stack spacing={3} sx={{ mt: loading ? 2 : 0 }}>
+          {caps.fleetAdmin && (<>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
             <HeroMetric
               label="Sessions (7d)"
@@ -406,7 +414,9 @@ export default function UsagePage() {
               )
             })}
           </Stack>
+          </>)}
 
+          {caps.cloudAdmin && (
           <Box
             data-testid="analytics-notifications"
             sx={{
@@ -462,6 +472,7 @@ export default function UsagePage() {
               </Stack>
             )}
           </Box>
+          )}
 
           {actionMessage ? (
             <Alert severity="info" data-testid="analytics-action-message">
