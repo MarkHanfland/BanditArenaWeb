@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Alert, Box } from '@mui/material'
 import { AuthProvider, useAuth } from './auth/useAuth'
+import { clearOfflineSession } from './auth/offlineSession'
+import { useOfflineSession } from './auth/useOfflineSession'
 import { configureAmplifyAuth, resolveAuthMode } from './auth/amplifyConfig'
 import {
   BanditAuthLoadingShell,
@@ -35,12 +37,25 @@ function LocalBypassGate() {
 function CognitoApp() {
   return (
     <CognitoAuthRoot>
-      <AuthProvider>
+      <CognitoOrOfflineProvider />
+    </CognitoAuthRoot>
+  )
+}
+
+/** FR-SW-AUTH-015: a device PIN session runs on the device-issued token and local role only. */
+function CognitoOrOfflineProvider() {
+  const offline = useOfflineSession()
+  return (
+      <AuthProvider
+        key={offline ? offline.token : 'cognito'}
+        initialAccessToken={offline?.token || null}
+        initialUser={offline?.user || null}
+        onE2eSignOut={offline ? clearOfflineSession : null}
+      >
         <ConsoleErrorBoundary>
           <Dashboard />
         </ConsoleErrorBoundary>
       </AuthProvider>
-    </CognitoAuthRoot>
   )
 }
 

@@ -27,6 +27,9 @@ import WarningIcon from '@mui/icons-material/Warning'
 import InfoIcon from '@mui/icons-material/Info'
 import SecurityIcon from '@mui/icons-material/Security'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
+import PanToolIcon from '@mui/icons-material/PanTool'
+import PauseCircleIcon from '@mui/icons-material/PauseCircle'
+import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk'
 import { getErrorEvents, getSafetyEvents } from '../../api/device'
 
 const MAX_CONSECUTIVE_FAILURES = 3
@@ -61,6 +64,9 @@ const safetyEventIcons = {
   EMERGENCY_STOP: <ReportProblemIcon color="error" />,
   SENSOR_FAILURE: <ErrorIcon color="error" />,
   RECOVERY: <InfoIcon color="success" />,
+  PLAYER_STOP_REQUESTED: <PanToolIcon color="info" />,
+  TREAD_EXIT: <DirectionsWalkIcon color="error" />,
+  PLAYER_PAUSE_REQUESTED: <PauseCircleIcon color="info" />,
 }
 
 function EventsTab() {

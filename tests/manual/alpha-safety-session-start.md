@@ -1,12 +1,18 @@
 # Manual workflows: Wave 1 safety and session start
 
-## Player stop pose
+## Player stop and pause poses
+
+The stop pose is both arms crossed above the head. The pause pose is both arms raised straight above the head, not crossed. Both count only while the Player is standing still with the tread at zero, after 1.5 seconds of holding.
 
 1. Start a session on a simulator with skeletal tracking.
-2. Walk. Raise both arms and cross the wrists above the head. The session continues.
-3. Stop walking until the tread command is zero. Hold the same pose for 1.5 seconds.
-4. The session ends. The events list shows `PLAYER_STOP_REQUESTED` and the stop source `player_pose`. The deck does not release and emergency stop is not latched.
-5. Hold the pose for less than 1.5 seconds. The session continues.
+2. Walk with the arms crossed above the head, then with the arms straight up. The session continues in both cases.
+3. Stop walking until the tread command is zero. Raise both arms straight up and hold for 1.5 seconds.
+4. The session pauses: the events list shows `PLAYER_PAUSE_REQUESTED`, the status band shows "Player paused" with **Confirm restart**, and the tread stays at zero. Emergency stop is not latched.
+5. Lower the arms, stand centred, and select **Confirm restart**. The session resumes.
+6. Pause again, then step off the tread. After 3 seconds the session ends with `TREAD_EXIT` and the emergency stop latches.
+7. Start a new session. Stand still and cross both wrists above the head for 1.5 seconds.
+8. The session ends: the events list shows `PLAYER_STOP_REQUESTED` and the status band says the Player ended the session with the stop pose. The deck does not release and emergency stop is not latched.
+9. Hold either pose for less than 1.5 seconds. Nothing happens.
 
 ## Fall probability
 

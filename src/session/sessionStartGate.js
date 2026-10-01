@@ -69,66 +69,8 @@ export function evaluateOfflinePin({ signedInAtMs, nowMs, startingSession }) {
   return { allow: true, code: null, message: '' }
 }
 
-/** FNV-1a of salt:pin. The PIN is never stored. Matches the device verifier. */
-export function pinDigest(salt, pin) {
-  let hash = 2166136261
-  const text = `${salt}:${pin}`
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-export function createOfflineCredential({ pin, salt, roles = ['bandit-operator'], lastContactMs }) {
-  if (!/^\d{6,}$/.test(String(pin || ''))) {
-    return { ok: false, code: 'PIN_TOO_SHORT', message: 'PIN must be at least 6 digits' }
-  }
-  return {
-    ok: true,
-    credential: {
-      salt,
-      verifier: pinDigest(salt, pin),
-      roles,
-      lastContactMs,
-      failures: 0,
-      locked: false,
-      disabled: false,
-      denied: false,
-    },
-  }
-}
-
-export function attemptOfflineSignIn({ credential, pin, nowMs, limitMs = HOUR_MS }) {
-  if (!credential || credential.disabled || credential.denied) {
-    return { allow: false, code: 'PIN_DENIED', message: 'Offline sign-in is not allowed', credential }
-  }
-  if (credential.locked) {
-    return { allow: false, code: 'PIN_LOCKED', message: 'Offline sign-in is locked', credential }
-  }
-  if (nowMs - credential.lastContactMs > limitMs) {
-    return { allow: false, code: 'PIN_EXPIRED', message: 'Offline sign-in has expired', credential }
-  }
-  if (pinDigest(credential.salt, pin) !== credential.verifier) {
-    const failures = (credential.failures || 0) + 1
-    const locked = failures >= 5
-    const next = { ...credential, failures, locked }
-    return {
-      allow: false,
-      code: locked ? 'PIN_LOCKED' : 'PIN_REJECTED',
-      message: locked ? 'Offline sign-in is locked' : 'PIN was not accepted',
-      credential: next,
-    }
-  }
-  return {
-    allow: true,
-    code: null,
-    message: '',
-    roles: credential.roles || [],
-    expiresAtMs: credential.lastContactMs + limitMs,
-    credential: { ...credential, failures: 0 },
-  }
-}
+// FR-SW-AUTH-015: the PIN is verified on the device (POST /auth/offline-pin, PBKDF2
+// verifier, lockout, expiry from the last cloud contact). The console keeps no PIN data.
 
 export function offlineActionAllowed(action) {
   if (action === 'session-start') {

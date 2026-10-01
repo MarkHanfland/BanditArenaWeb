@@ -7,13 +7,10 @@ import {
   evaluateEligibility,
   evaluateOfflinePin,
   fallProbability,
-  attemptOfflineSignIn,
-  createOfflineCredential,
   evaluateCloudLoss,
   evaluateResume,
   evaluateTreadExit,
   offlineActionAllowed,
-  pinDigest,
   rejectReservedPose,
   stopPoseHeld,
 } from './sessionStartGate.js'
@@ -100,21 +97,7 @@ test('restart ends when the cloud is down and tread exit ends a pending restart'
   assert.equal(evaluateCloudLoss({ sessionActive: true, lastContactMs: 0, nowMs: 1000 }).end, false)
 })
 
-test('offline PIN locks after five failures and never starts a session', () => {
-  const created = createOfflineCredential({ pin: '123456', salt: 'abc', lastContactMs: 0 })
-  assert.equal(created.ok, true)
-  assert.notEqual(created.credential.verifier, '123456')
-  assert.equal(pinDigest('abc', '123456'), created.credential.verifier)
-  let credential = created.credential
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const rejected = attemptOfflineSignIn({ credential, pin: '000000', nowMs: 1000 })
-    assert.equal(rejected.code, 'PIN_REJECTED')
-    credential = rejected.credential
-  }
-  const locked = attemptOfflineSignIn({ credential, pin: '000000', nowMs: 1000 })
-  assert.equal(locked.code, 'PIN_LOCKED')
-  const accepted = attemptOfflineSignIn({ credential: created.credential, pin: '123456', nowMs: 1000 })
-  assert.equal(accepted.allow, true)
+test('offline sessions cannot start a session or change configuration', () => {
   assert.equal(offlineActionAllowed('session-start').code, 'CLOUD_UNAVAILABLE')
   assert.equal(offlineActionAllowed('config-write').code, 'ONLINE_SIGN_IN_REQUIRED')
   assert.equal(rejectReservedPose('bandit/safety/stop'), true)

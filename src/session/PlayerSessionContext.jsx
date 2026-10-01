@@ -41,7 +41,9 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     if (data) {
       setSession(data)
       if (data.pendingRestart) {
-        setMessage('Player stop — the tread stays at zero until restart is confirmed.')
+        setMessage('Player paused — the tread stays at zero until restart is confirmed.')
+      } else if (data.sessionEndCause === 'player_stop') {
+        setMessage('The player ended the session with the stop pose.')
       } else if (data.sessionEndCause === 'tread_exit') {
         setMessage('The player left the tread. The session ended.')
       } else if (data.sessionEndCause === 'cloud_loss' || data.sessionEndCause === 'cloud_unavailable') {
@@ -304,20 +306,16 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
   }, [players, selected, selectedMediaId, startForPlayer])
 
   const resumePlayer = useCallback(async () => {
-    const { data, error } = await resumeSession({
-      trackingOk: Boolean(session?.trackingReady),
-      upright: true,
-      inDeadZone: true,
-      confirmed: true,
-      cloudReachable: typeof navigator === 'undefined' ? true : navigator.onLine,
-    })
+    // FR-SW-SAFE-008: the device checks tracking, upright, dead zone, and cloud itself;
+    // the console only carries the Player's explicit confirmation.
+    const { data, error } = await resumeSession({ confirmed: true })
     if (error) {
       setMessage(error)
       return
     }
     if (data) setSession(data)
     setMessage(data?.pendingRestart ? 'Restart is not confirmed' : '')
-  }, [session])
+  }, [])
 
   const handleEnd = useCallback(async () => {
     setBusy(true)
