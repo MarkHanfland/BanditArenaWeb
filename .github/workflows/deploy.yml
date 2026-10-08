@@ -36,7 +36,14 @@ jobs:
         run: npm ci
 
       - name: Build React app
-        run: npm run build
+        env:
+          VITE_MAPBOX_ACCESS_TOKEN: ${{ secrets.VITE_MAPBOX_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$VITE_MAPBOX_ACCESS_TOKEN" ]; then
+            echo "GitHub secret VITE_MAPBOX_ACCESS_TOKEN is required for the Mapbox maps."
+            exit 1
+          fi
+          npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
