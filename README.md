@@ -2,7 +2,7 @@
 
 Unified Bandit Arena **operator console** — local treadmill control and cloud fleet management in one React app.
 
-Public product marketing for Bandit Alpha lives in [BanditArenaWebsite](../BanditArenaWebsite) at `https://banditarena.com`. This repo must not ship marketing pages into the device `web/` dist.
+Public product marketing for Bandit Alpha lives in [BanditArenaAdminWebsite](../BanditArenaAdminWebsite) at `https://banditarena.com`. This repo must not ship marketing pages into the device `web/` dist.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ Public product marketing for Bandit Alpha lives in [BanditArenaWebsite](../Bandi
 |---------|--------|
 | `https://console.banditarena.com/*` | S3 + CloudFront (this repo) |
 | `https://console.banditarena.com/api/*` | Amplify API Gateway + Lambda |
-| `https://banditarena.com/*` | Public product site ([BanditArenaWebsite](../BanditArenaWebsite)) |
+| `https://banditarena.com/*` | Public product site ([BanditArenaAdminWebsite](../BanditArenaAdminWebsite)) |
 | `http://localhost:9724/*` | Bandit Arena C++ REST (local device) |
 | `http://localhost:5173/*` | Vite dev server (local development) |
 
@@ -80,7 +80,7 @@ scripts/
 | Project | Role |
 |---------|------|
 | `BanditArena` | C++ runtime; release packages `BanditArenaWeb/dist` into `build/bin/Release/web` |
-| `BanditArenaWebsite` | Public product site at banditarena.com |
+| `BanditArenaAdminWebsite` | Public product site at banditarena.com |
 | `BanditCorporateWebsite` | Corporate site at banditdesigngroup.com |
 | `BanditArenaCloud` | Amplify backend (Lambda, API Gateway, Cognito, DynamoDB) — no frontend hosting |
 | `BanditArenaCloudInfrastructure` | S3/CloudFront stack, Cognito test pools, deploy scripts |
