@@ -1,5 +1,7 @@
 import axios from 'axios'
 
+import { attachSessionRecovery } from '../../auth/expiredSession'
+
 import { getCloudApiBaseUrl } from '../../config/runtime'
 
 import { isE2eAuthBypass } from '../../auth/e2eAuth'
@@ -18,6 +20,8 @@ const cloudApi = axios.create({
 
 let _authToken = null
 let _operatorId = null
+let _refreshCallback = null
+let _loginCallback = null
 
 
 
@@ -49,11 +53,55 @@ export function setCloudOperatorId(operatorId) {
 
 
 
+/**
+
+ * FR-SW-AUTH-011 scope switcher: a staff member bound in several tenants picks one. The cloud
+
+ * checks the binding and answers 404 for a tenant the caller is not bound to.
+
+ */
+
+let _activeTenant = null
+
+
+
+export function setActiveTenant(operatorId) {
+
+  _activeTenant = operatorId || null
+
+}
+
+
+
+export function getActiveTenant() {
+
+  return _activeTenant
+
+}
+
+
+
 export function clearCloudAuthToken() {
 
   _authToken = null
 
   delete cloudApi.defaults.headers.common.Authorization
+
+}
+
+
+
+export function setCloudRefreshCallback(fn) {
+
+  _refreshCallback = fn
+
+}
+
+
+
+export function setCloudLoginCallback(fn) {
+
+  _loginCallback = fn
 
 }
 
@@ -71,11 +119,43 @@ cloudApi.interceptors.request.use((config) => {
 
   }
 
+  if (_activeTenant) {
+
+    config.headers['x-bandit-tenant'] = _activeTenant
+
+  } else {
+
+    delete config.headers['x-bandit-tenant']
+
+  }
+
   // TR-OBS-002: one W3C trace per request; the cloud returns its id as correlationId.
 
   config.headers.traceparent = newTraceparent()
 
   return config
+
+})
+
+
+
+attachSessionRecovery(cloudApi, {
+
+  refresh: () => (_refreshCallback ? _refreshCallback() : false),
+
+  signedIn: () => Boolean(_authToken),
+
+  onSignIn: () => {
+
+    if (_loginCallback) _loginCallback()
+
+  },
+
+  applyAuthorization: (config) => {
+
+    config.headers.Authorization = `Bearer ${_authToken}`
+
+  },
 
 })
 
@@ -139,9 +219,35 @@ async function request(promiseFactory) {
 
 
 
+/** FR-SW-AUTH-011: the caller's role bindings and tenants, for the scope switcher. */
+
+export async function getMyRoleBindings() {
+
+  return request(() => cloudApi.get('/role-bindings/me'))
+
+}
+
+
+
 export async function getOperatorMe() {
 
   return request(() => cloudApi.get('/operators/me'))
+
+}
+
+
+
+export async function getPublicEnrollment() {
+
+  return request(() => cloudApi.get('/platform/public-enrollment'))
+
+}
+
+
+
+export async function setPublicEnrollment(enabled) {
+
+  return request(() => cloudApi.put('/platform/public-enrollment', { enabled }))
 
 }
 
@@ -659,6 +765,14 @@ export async function createVenue(payload) {
 export async function patchVenue(venueId, payload) {
 
   return request(() => cloudApi.patch(`/venues/${venueId}`, payload))
+
+}
+
+
+
+export async function setDevicePublicBooking(instanceId, publicBooking) {
+
+  return request(() => cloudApi.patch(`/devices/${instanceId}/public-booking`, { publicBooking }))
 
 }
 

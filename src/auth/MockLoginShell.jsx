@@ -17,6 +17,9 @@ import {
   ROLE_VENUE_ADMIN,
   ROLE_FLEET_ADMIN,
   ROLE_CLOUD_ADMIN,
+  ROLE_ACCOUNT_OWNER,
+  ROLE_BILLING_ADMIN,
+  ROLE_FRONT_DESK,
 } from './rolePermissions'
 
 const GROUP_BY_ROLE = {
@@ -25,6 +28,9 @@ const GROUP_BY_ROLE = {
   [ROLE_VENUE_ADMIN]: 'bandit-venue-admin',
   [ROLE_FLEET_ADMIN]: 'bandit-fleet-admin',
   [ROLE_CLOUD_ADMIN]: 'bandit-cloud-admin',
+  [ROLE_ACCOUNT_OWNER]: 'bandit-account-owner',
+  [ROLE_BILLING_ADMIN]: 'bandit-billing-admin',
+  [ROLE_FRONT_DESK]: 'bandit-front-desk',
 }
 
 export default function MockLoginShell() {
@@ -106,6 +112,9 @@ export default function MockLoginShell() {
             <MenuItem value={ROLE_VENUE_ADMIN}>Venue Admin</MenuItem>
             <MenuItem value={ROLE_FLEET_ADMIN}>Fleet Admin</MenuItem>
             <MenuItem value={ROLE_CLOUD_ADMIN}>Cloud Admin</MenuItem>
+            <MenuItem value={ROLE_ACCOUNT_OWNER}>Account Owner</MenuItem>
+            <MenuItem value={ROLE_BILLING_ADMIN}>Billing Admin</MenuItem>
+            <MenuItem value={ROLE_FRONT_DESK}>Front Desk</MenuItem>
           </TextField>
           <Button
             variant="contained"

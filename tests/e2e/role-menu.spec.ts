@@ -4,7 +4,7 @@ import { expandAllMenuGroups } from '../helpers/menuNav';
 import { mockConsoleApis } from '../helpers/mockApis';
 
 type RoleCase = {
-  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin';
+  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin' | 'accountOwner' | 'billingAdmin' | 'frontDesk';
   expected: string[];
   expectedDisabled: string[];
   notExpected: string[];
@@ -113,6 +113,28 @@ const roleCases: RoleCase[] = [
     ],
     expectedDisabled: ['menu-subscriptions', 'menu-roles', 'menu-audit'],
     notExpected: ['menu-fleet', 'menu-group-device-fleet'],
+  },
+  // FR-SW-UI-014 / FR-SW-AUTH-012 tenant staff roles (cloud-only: no Local Device menus).
+  {
+    roleId: 'accountOwner',
+    expected: [
+      'menu-users', 'menu-reservations', 'menu-staff', 'menu-sessions', 'menu-media',
+      'menu-billing', 'menu-usage', 'menu-group-operations', 'menu-group-business',
+    ],
+    expectedDisabled: [],
+    notExpected: ['menu-dashboard', 'menu-fleet', 'menu-accounts', 'menu-service-logs', 'menu-group-device-fleet'],
+  },
+  {
+    roleId: 'billingAdmin',
+    expected: ['menu-billing', 'menu-group-business'],
+    expectedDisabled: [],
+    notExpected: ['menu-dashboard', 'menu-users', 'menu-reservations', 'menu-staff', 'menu-fleet', 'menu-accounts', 'menu-group-operations'],
+  },
+  {
+    roleId: 'frontDesk',
+    expected: ['menu-reservations', 'menu-users', 'menu-group-operations'],
+    expectedDisabled: [],
+    notExpected: ['menu-dashboard', 'menu-staff', 'menu-sessions', 'menu-billing', 'menu-media', 'menu-fleet', 'menu-group-business', 'menu-group-device-fleet'],
   },
 ];
 

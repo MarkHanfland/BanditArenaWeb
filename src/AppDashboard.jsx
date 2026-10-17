@@ -23,6 +23,8 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import StopCircleIcon from '@mui/icons-material/StopCircle'
 import PlayCircleFilledWhiteIcon from '@mui/icons-material/PlayCircleFilledWhite'
 import CloudQueueIcon from '@mui/icons-material/CloudQueue'
+import PageErrorBanner from './components/PageErrorBanner'
+import { clearPageError } from './pageError'
 import GroupIcon from '@mui/icons-material/Group'
 import PaymentsIcon from '@mui/icons-material/Payments'
 import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
@@ -73,9 +75,12 @@ import { filterMenuGroups } from './auth/rolePermissions'
 import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
 import DeviceStatusBand from './components/shared/DeviceStatusBand'
+import ScopeSwitcher from './components/shared/ScopeSwitcher'
 import ConsoleErrorBoundary from './components/shared/ConsoleErrorBoundary'
 import { PlayerSessionProvider, SESSION_PHASE, usePlayerSession } from './session/PlayerSessionContext'
 import { isCloudDeployment } from './config/runtime'
+import { jwtExpiryMs, recoverExpiredSession } from './auth/expiredSession'
+import { useOfflineSession } from './auth/useOfflineSession'
 import {
   setAuthToken,
   clearAuthToken,
@@ -86,7 +91,7 @@ import {
   triggerSafetyStart,
   getAuthInfo,
 } from './api/device'
-import { setCloudAuthToken, clearCloudAuthToken, setCloudOperatorId } from './api/cloud'
+import { setCloudAuthToken, clearCloudAuthToken, setCloudOperatorId, setCloudRefreshCallback, setCloudLoginCallback } from './api/cloud'
 import {
   MENU_GROUP,
   MENU_LEAF_CATALOG,
@@ -208,8 +213,13 @@ export default function Dashboard() {
 }
 
 function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
+  // FR-SW-AUTH-011: changing tenant remounts the page so it reloads in the new scope.
+  const [scopeKey, setScopeKey] = useState('home')
+  const handleScopeChange = useCallback((tenant) => setScopeKey(tenant || 'home'), [])
   const { accessToken, cloudAuthToken, idToken, user, logout, refreshAccessToken, login } = useAuth()
+  const offline = useOfflineSession()
   const { sessionActive } = usePlayerSession()
+  useEffect(() => { clearPageError() }, [activeTab])
   const [treadmillState, setTreadmillState] = useState(null)
   const [safetyActionBusy, setSafetyActionBusy] = useState(false)
   const [safetyStopLatched, setSafetyStopLatched] = useState(false)
@@ -347,11 +357,36 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   useEffect(() => {
     setRefreshCallback(refreshAccessToken)
     setLoginCallback(login)
+    setCloudRefreshCallback(refreshAccessToken)
+    setCloudLoginCallback(login)
     return () => {
       setRefreshCallback(null)
       setLoginCallback(null)
+      setCloudRefreshCallback(null)
+      setCloudLoginCallback(null)
     }
   }, [refreshAccessToken, login])
+
+  useEffect(() => {
+    if (offline || !accessToken) return undefined
+    const exp = jwtExpiryMs(accessToken)
+    if (exp === null) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(() => {
+      recoverExpiredSession({
+        status: 401,
+        alreadyRetried: false,
+        refresh: refreshAccessToken,
+        signedIn: () => true,
+      }).then((decision) => {
+        if (!cancelled && decision === 'sign-in') login()
+      })
+    }, Math.max(0, exp - Date.now()))
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [accessToken, offline, refreshAccessToken, login])
 
   useEffect(() => {
     if (!deviceOnline) {
@@ -472,6 +507,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
               >
                 {safetyButtonLabel}
               </Button>
+              {isCloudDeployment() && <ScopeSwitcher onChange={handleScopeChange} />}
               <Typography variant="body2" sx={{ opacity: 0.8 }}>
                 {user.username}
               </Typography>
@@ -488,6 +524,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
           )}
         </Toolbar>
       </AppBar>
+      <PageErrorBanner />
 
       <DeviceStatusBand deviceOnline={deviceOnline === true} />
 
@@ -589,7 +626,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
               {isDeviceTab && deviceOnline === false ? (
                 <DeviceOfflinePanel />
               ) : (
-                activeItem?.panel({ treadmillState })
+                <React.Fragment key={scopeKey}>{activeItem?.panel({ treadmillState })}</React.Fragment>
               )}
             </ConsoleErrorBoundary>
           </TabPanel>

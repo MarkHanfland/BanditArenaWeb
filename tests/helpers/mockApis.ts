@@ -1197,10 +1197,32 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     if (path === '/license-plans' && method === 'GET') {
       return json({
         plans: [
-          { planId: 'content_basic', name: 'Content Basic', licenseTier: 'content_basic' },
-          { planId: 'venue_pro', name: 'Venue Pro', licenseTier: 'venue_pro' },
+          {
+            planId: 'content_basic',
+            name: 'Content Basic',
+            licenseTier: 'content_basic',
+            maxDevices: 5,
+            features: ['session', 'content_base'],
+            contentEntitlements: ['media-demo-001'],
+          },
+          {
+            planId: 'venue_pro',
+            name: 'Venue Pro',
+            licenseTier: 'venue_pro',
+            maxDevices: 10,
+            features: ['session', 'content_base', 'ota'],
+            contentEntitlements: null,
+          },
         ],
         message: 'License plans',
+      });
+    }
+    const publicBooking = path.match(/^\/devices\/([^/]+)\/public-booking$/);
+    if (publicBooking && method === 'PATCH') {
+      const body = route.request().postDataJSON() || {};
+      return json({
+        device: { instanceId: publicBooking[1], publicBooking: body.publicBooking === true },
+        message: body.publicBooking ? 'Treadmill included in public booking' : 'Treadmill excluded from public booking',
       });
     }
     const licenseAction = path.match(/^\/licenses\/([^/]+)\/(renew|revoke|assign)$/);

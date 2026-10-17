@@ -454,6 +454,30 @@ export default function BillingPage() {
 
       {!loading && tab === 'licensing' && (
         <Stack spacing={2}>
+          <Table size="small" data-testid="license-plan-catalog">
+            <TableHead>
+              <TableRow>
+                <TableCell>Plan</TableCell>
+                <TableCell>Features</TableCell>
+                <TableCell>Content</TableCell>
+                <TableCell>Max devices</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {plans.map((plan) => (
+                <TableRow key={plan.planId} data-testid={`license-plan-${plan.planId}`}>
+                  <TableCell>{plan.name || plan.planId}</TableCell>
+                  <TableCell>{(plan.features || []).join(', ') || '—'}</TableCell>
+                  <TableCell>
+                    {Array.isArray(plan.contentEntitlements)
+                      ? (plan.contentEntitlements.join(', ') || 'None')
+                      : 'All published titles'}
+                  </TableCell>
+                  <TableCell>{plan.maxDevices ?? '—'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
           <Button
             variant="contained"
             onClick={() => setIssueOpen(true)}

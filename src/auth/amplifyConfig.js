@@ -51,6 +51,8 @@ function authConfigFromDeviceInfo(deviceInfo) {
   return {
     auth_enabled: true,
     client_id: deviceInfo.client_id,
+    // SW-042: the device's client belongs to the Local User Pool the device reports.
+    user_pool_id: deviceInfo.user_pool_id || '',
     cognito_domain: normalizeCognitoDomain(deviceInfo.cognito_domain),
     redirect_uri: deviceInfo.redirect_uri,
     logout_uri: deviceInfo.redirect_uri?.replace('/auth/callback', '/') || `${window.location.origin}/`,
@@ -59,7 +61,7 @@ function authConfigFromDeviceInfo(deviceInfo) {
 }
 
 export function buildAmplifyResourcesConfig(authCfg) {
-  const userPoolId = readUserPoolId()
+  const userPoolId = authCfg?.user_pool_id || readUserPoolId()
   if (!userPoolId) {
     throw new Error('Cognito user pool id is not configured.')
   }

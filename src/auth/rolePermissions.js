@@ -1,5 +1,5 @@
-import { isCloudDeployment } from '../config/runtime'
-import { MENU_GROUP, MENU_LEAF_CATALOG } from '../nav/consoleMenu'
+import { isCloudDeployment } from '../config/runtime.js'
+import { MENU_GROUP, MENU_LEAF_CATALOG } from '../nav/consoleMenu.js'
 
 export const ROLE_OPERATOR = 'operator'
 export const ROLE_TECHNICIAN = 'technician'
@@ -8,6 +8,8 @@ export const ROLE_FLEET_ADMIN = 'fleet-admin'
 export const ROLE_CLOUD_ADMIN = 'cloud-admin'
 export const ROLE_DEVELOPER = 'developer'
 export const ROLE_FRONT_DESK = 'front-desk'
+export const ROLE_ACCOUNT_OWNER = 'account-owner'
+export const ROLE_BILLING_ADMIN = 'billing-admin'
 /** Cloud user with no staff group: no cloud menus (fail closed). */
 export const ROLE_NONE = 'none'
 
@@ -38,6 +40,14 @@ const FLEET_ADMIN_CLOUD = [
 const TECHNICIAN_CLOUD = ['support', 'diagnostics']
 /** Integration Developer: read-only on Domains 03, 04, 09, 10, 11. */
 const DEVELOPER_CLOUD = ['reservations', 'users', 'staff', 'sessions', 'usage']
+/**
+ * FR-SW-AUTH-012 tenant staff roles. Account Owner: every venue page plus agreements and
+ * billing and staff delegation, no fleet or catalog writes. Billing Admin: billing only.
+ * Front Desk: reservations, check-in, and Player lookup and enrollment.
+ */
+const ACCOUNT_OWNER_CLOUD = [...VENUE_CLOUD, 'billing', 'usage']
+const BILLING_ADMIN_CLOUD = ['billing']
+const FRONT_DESK_CLOUD = ['reservations', 'users']
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'treadmill', 'events'],
@@ -46,6 +56,9 @@ export const ROLE_PERMISSIONS = {
   [ROLE_FLEET_ADMIN]: [...DEVICE_MENU_IDS, ...FLEET_ADMIN_CLOUD],
   [ROLE_CLOUD_ADMIN]: [...DEVICE_MENU_IDS, ...CLOUD_ADMIN_CLOUD],
   [ROLE_DEVELOPER]: DEVELOPER_CLOUD,
+  [ROLE_ACCOUNT_OWNER]: ACCOUNT_OWNER_CLOUD,
+  [ROLE_BILLING_ADMIN]: BILLING_ADMIN_CLOUD,
+  [ROLE_FRONT_DESK]: FRONT_DESK_CLOUD,
   [ROLE_NONE]: [],
 }
 
@@ -53,14 +66,13 @@ const GROUP_ROLE = {
   'bandit-cloud-admin': ROLE_CLOUD_ADMIN,
   'bandit-fleet-admin': ROLE_FLEET_ADMIN,
   'bandit-venue-admin': ROLE_VENUE_ADMIN,
-  'bandit-account-owner': ROLE_VENUE_ADMIN,
+  'bandit-account-owner': ROLE_ACCOUNT_OWNER,
+  'bandit-billing-admin': ROLE_BILLING_ADMIN,
   'bandit-front-desk': ROLE_FRONT_DESK,
   'bandit-technician': ROLE_TECHNICIAN,
   'bandit-developer': ROLE_DEVELOPER,
   'bandit-operator': ROLE_OPERATOR,
 }
-
-ROLE_PERMISSIONS[ROLE_FRONT_DESK] = ['reservations', 'users']
 
 export function extractGroupsFromUser(user) {
   if (Array.isArray(user?.groups)) {
@@ -79,33 +91,31 @@ export function extractGroupsFromUser(user) {
   return []
 }
 
-export function deriveUserRole(user) {
-  const groups = extractGroupsFromUser(user)
-  if (groups.includes('bandit-cloud-admin')) {
-    return ROLE_CLOUD_ADMIN
-  }
-  if (groups.includes('bandit-fleet-admin')) {
-    return ROLE_FLEET_ADMIN
-  }
-  if (groups.includes('bandit-venue-admin') || groups.includes('bandit-developer')) {
-    return ROLE_VENUE_ADMIN
-  }
-  if (groups.includes('bandit-technician')) {
-    return ROLE_TECHNICIAN
-  }
-  if (groups.includes('bandit-operator')) {
-    return ROLE_OPERATOR
-  }
-  // Cloud console without groups: treat as venue admin for Alpha lab access.
-  if (isCloudDeployment()) {
-    return ROLE_VENUE_ADMIN
-  }
-  return ROLE_OPERATOR
+/** Highest role, for labels; menus come from every group the user holds (getAllowedMenuIds). */
+const ROLE_ORDER = [
+  ROLE_CLOUD_ADMIN, ROLE_FLEET_ADMIN, ROLE_ACCOUNT_OWNER, ROLE_VENUE_ADMIN, ROLE_BILLING_ADMIN,
+  ROLE_FRONT_DESK, ROLE_TECHNICIAN, ROLE_DEVELOPER, ROLE_OPERATOR,
+]
+
+/** Roles the user holds, from their Cognito groups. */
+export function userRoles(user) {
+  const roles = new Set(extractGroupsFromUser(user).map((g) => GROUP_ROLE[g]).filter(Boolean))
+  return ROLE_ORDER.filter((r) => roles.has(r))
 }
 
+export function deriveUserRole(user) {
+  const roles = userRoles(user)
+  if (roles.length) return roles[0]
+  // FR-SW-UI-014: a cloud user with no staff group sees no cloud menus (fail closed). On a
+  // device console with authentication off (lab), the local bypass user is an Operator.
+  return isCloudDeployment() ? ROLE_NONE : ROLE_OPERATOR
+}
+
+/** FR-SW-UI-014: the union of the menus every one of the user's roles permits. */
 export function getAllowedMenuIds(user) {
-  const role = deriveUserRole(user)
-  return [...(ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS[ROLE_OPERATOR])]
+  const roles = userRoles(user)
+  const effective = roles.length ? roles : [deriveUserRole(user)]
+  return [...new Set(effective.flatMap((r) => ROLE_PERMISSIONS[r] || []))]
 }
 
 export function filterMenuGroups(menuGroups, user) {
@@ -127,10 +137,14 @@ export function cloudCapabilities(user) {
   const has = (g) => groups.includes(g)
   const cloudAdmin = has('bandit-cloud-admin')
   const fleetAdmin = has('bandit-fleet-admin')
+  const accountOwner = cloudAdmin || has('bandit-account-owner')
   return {
     cloudAdmin,
     fleetAdmin,
-    venueAdmin: cloudAdmin || has('bandit-account-owner') || has('bandit-venue-admin'),
+    accountOwner,
+    billingAdmin: accountOwner || has('bandit-billing-admin'),
+    venueAdmin: accountOwner || has('bandit-venue-admin'),
+    frontDesk: accountOwner || has('bandit-venue-admin') || has('bandit-front-desk'),
     technician: fleetAdmin || has('bandit-technician'),
   }
 }

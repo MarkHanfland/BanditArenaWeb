@@ -3,6 +3,8 @@ import {
   Alert,
   Button,
   Chip,
+  FormControlLabel,
+  Switch,
   CircularProgress,
   MenuItem,
   Stack,
@@ -15,7 +17,7 @@ import {
   Typography,
 } from '@mui/material'
 import PageScaffold from '../../components/shared/PageScaffold'
-import { assignVenueRole, getOperatorMe, listVenueRoles, listVenues, unassignVenueRole } from '../../api/cloud'
+import { assignVenueRole, getOperatorMe, getPublicEnrollment, listVenueRoles, listVenues, setPublicEnrollment, unassignVenueRole } from '../../api/cloud'
 import { useAuth } from '../../auth/useAuth'
 import { extractGroupsFromUser } from '../../auth/rolePermissions'
 
@@ -37,6 +39,7 @@ export default function StaffPage() {
   const [principal, setPrincipal] = useState('')
   const [role, setRole] = useState('bandit-operator')
   const [message, setMessage] = useState('')
+  const [publicEnrollment, setPublicEnrollmentOpen] = useState(true)
 
   const loadVenues = useCallback(async () => {
     setLoading(true)
@@ -70,7 +73,25 @@ export default function StaffPage() {
 
   useEffect(() => {
     loadVenues()
-  }, [loadVenues])
+    if (!canAssign) return undefined
+    let cancelled = false
+    getPublicEnrollment().then((result) => {
+      if (!cancelled && typeof result.data?.publicEnrollment === 'boolean') {
+        setPublicEnrollmentOpen(result.data.publicEnrollment)
+      }
+    })
+    return () => { cancelled = true }
+  }, [loadVenues, canAssign])
+
+  async function changePublicEnrollment(enabled) {
+    const result = await setPublicEnrollment(enabled)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    setPublicEnrollmentOpen(result.data?.publicEnrollment === true)
+    setMessage(result.data?.publicEnrollment ? 'Public enrollment is open.' : 'Public enrollment is closed.')
+  }
 
   useEffect(() => {
     loadRoles(venueId)
@@ -112,6 +133,19 @@ export default function StaffPage() {
         <Alert severity="info" sx={{ mb: 2 }} data-testid="staff-read-only">
           Only a Cloud Administrator can assign or remove staff roles.
         </Alert>
+      )}
+      {canAssign && (
+        <FormControlLabel
+          sx={{ mb: 2 }}
+          control={(
+            <Switch
+              checked={publicEnrollment}
+              onChange={(event) => changePublicEnrollment(event.target.checked)}
+              inputProps={{ 'data-testid': 'public-enrollment' }}
+            />
+          )}
+          label="Public player enrollment"
+        />
       )}
       {!loading && !error && (
         <Stack spacing={2}>

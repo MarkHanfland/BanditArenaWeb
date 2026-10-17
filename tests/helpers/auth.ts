@@ -1,6 +1,8 @@
 import { getTestAdministratorUser } from './testCredentials';
 
-export type E2eAdminRole = 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin';
+export type E2eAdminRole =
+  | 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin'
+  | 'accountOwner' | 'billingAdmin' | 'frontDesk';
 
 const E2E_BYPASS_USERS: Record<E2eAdminRole, { username: string; password: string; label: string }> = {
   operator: { username: 'test-operator', password: 'e2e-bypass', label: 'Operator' },
@@ -8,6 +10,9 @@ const E2E_BYPASS_USERS: Record<E2eAdminRole, { username: string; password: strin
   venueAdmin: { username: 'test-venue-admin', password: 'e2e-bypass', label: 'Venue Admin' },
   fleetAdmin: { username: 'test-fleet-admin', password: 'e2e-bypass', label: 'Fleet Admin' },
   cloudAdmin: { username: 'test-cloud-admin', password: 'e2e-bypass', label: 'Cloud Admin' },
+  accountOwner: { username: 'test-account-owner', password: 'e2e-bypass', label: 'Account Owner' },
+  billingAdmin: { username: 'test-billing-admin', password: 'e2e-bypass', label: 'Billing Admin' },
+  frontDesk: { username: 'test-front-desk', password: 'e2e-bypass', label: 'Front Desk' },
 };
 
 export function resolveE2eAdminUser(roleId: E2eAdminRole) {

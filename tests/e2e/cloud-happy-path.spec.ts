@@ -207,6 +207,10 @@ test('billing issue and revoke license', async ({ page }) => {
   await openMenuItem(page, 'business', 'menu-billing');
   await expect(page.getByRole('heading', { name: 'Commerce' })).toBeVisible();
   await page.getByTestId('commerce-tab-licensing').click();
+  await expect(page.getByTestId('license-plan-catalog')).toBeVisible();
+  await expect(page.getByTestId('license-plan-content_basic')).toContainText('media-demo-001');
+  await expect(page.getByTestId('license-plan-venue_pro')).toContainText('All published titles');
+  await expect(page.getByTestId('license-plan-venue_pro')).toContainText('10');
   await page.getByTestId('issue-license').click();
   await page.getByTestId('issue-license-submit').click();
   await expect(page.getByTestId('billing-message')).toContainText('Issued lic-new-2');

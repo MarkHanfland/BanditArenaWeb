@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { attachSessionRecovery } from '../../auth/expiredSession'
 import { getDeviceApiBaseUrl } from '../../config/runtime'
 
 const deviceApi = axios.create({
@@ -33,24 +34,16 @@ deviceApi.interceptors.request.use((config) => {
   return config
 })
 
-deviceApi.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const original = error.config
-    if (error.response?.status === 401 && !original._authRetried && _refreshCallback) {
-      original._authRetried = true
-      const refreshed = await _refreshCallback()
-      if (refreshed && _authToken) {
-        original.headers.Authorization = `Bearer ${_authToken}`
-        return deviceApi(original)
-      }
-      if (_loginCallback) {
-        _loginCallback()
-      }
-    }
-    return Promise.reject(error)
+attachSessionRecovery(deviceApi, {
+  refresh: () => (_refreshCallback ? _refreshCallback() : false),
+  signedIn: () => Boolean(_authToken),
+  onSignIn: () => {
+    if (_loginCallback) _loginCallback()
   },
-)
+  applyAuthorization: (config) => {
+    config.headers.Authorization = `Bearer ${_authToken}`
+  },
+})
 
 export default deviceApi
 

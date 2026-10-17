@@ -29,6 +29,7 @@ import SecurityIcon from '@mui/icons-material/Security'
 import ReportProblemIcon from '@mui/icons-material/ReportProblem'
 import PanToolIcon from '@mui/icons-material/PanTool'
 import PauseCircleIcon from '@mui/icons-material/PauseCircle'
+import TimerOffIcon from '@mui/icons-material/TimerOff'
 import DirectionsWalkIcon from '@mui/icons-material/DirectionsWalk'
 import { getErrorEvents, getSafetyEvents } from '../../api/device'
 
@@ -67,6 +68,7 @@ const safetyEventIcons = {
   PLAYER_STOP_REQUESTED: <PanToolIcon color="info" />,
   TREAD_EXIT: <DirectionsWalkIcon color="error" />,
   PLAYER_PAUSE_REQUESTED: <PauseCircleIcon color="info" />,
+  TIMING_BUDGET_EXCEEDED: <TimerOffIcon color="warning" />,
 }
 
 function EventsTab() {

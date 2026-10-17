@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   Alert,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   Stack,
   Table,
@@ -57,6 +59,7 @@ export default function AccountsPage() {
   const [editBillingEmail, setEditBillingEmail] = useState('')
   const [editNotes, setEditNotes] = useState('')
   const [editOwnerCustomerId, setEditOwnerCustomerId] = useState('')
+  const [editPublished, setEditPublished] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -125,6 +128,7 @@ export default function AccountsPage() {
     setEditBillingEmail(row.billingEmail || '')
     setEditNotes(row.notes || '')
     setEditOwnerCustomerId(row.ownerCustomerId || ownerCustomerId)
+    setEditPublished(row.published !== false)
   }
 
   const handleSaveEdit = async () => {
@@ -148,6 +152,7 @@ export default function AccountsPage() {
         name: editName.trim(),
         timezone: editTimezone.trim() || undefined,
         ownerCustomerId: editOwnerCustomerId || undefined,
+        published: editPublished,
       })
     }
     if (result.error) {
@@ -352,6 +357,19 @@ export default function AccountsPage() {
                 </MenuItem>
               ))}
             </TextField>
+          )}
+          {tab === 'venues' && (
+            <FormControlLabel
+              sx={{ mt: 1 }}
+              control={(
+                <Checkbox
+                  checked={editPublished}
+                  onChange={(event) => setEditPublished(event.target.checked)}
+                  inputProps={{ 'data-testid': 'accounts-public-booking' }}
+                />
+              )}
+              label="Public booking"
+            />
           )}
         </DialogContent>
         <DialogActions>

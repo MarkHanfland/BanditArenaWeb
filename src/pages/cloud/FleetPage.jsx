@@ -39,7 +39,9 @@ import {
   listCustomers,
   listProductInstances,
   listVenues,
+  patchVenue,
   provisionDevice,
+  setDevicePublicBooking,
 } from '../../api/cloud'
 
 function inferProductId(modelOrId) {
@@ -90,6 +92,8 @@ export default function FleetPage({ initialTab = 'overview' }) {
   const [selectedId, setSelectedId] = useState(DEMO_FLEETS[0].devices[0]?.instanceId || '')
   const [view, setView] = useState('map')
   const [apiInstances, setApiInstances] = useState([])
+  const [publicBooking, setPublicBooking] = useState({})
+  const [venuePublished, setVenuePublished] = useState({})
   const [venues, setVenues] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -409,9 +413,32 @@ export default function FleetPage({ initialTab = 'overview' }) {
               }}
             >
               <Box sx={{ px: 2, py: 1.25, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                <Typography variant="subtitle2" fontWeight={700}>
-                  Devices · {listDevices.length}
-                </Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Devices · {listDevices.length}
+                  </Typography>
+                  {selectedVenueId ? (
+                    <Button
+                      size="small"
+                      data-testid="fleet-venue-public-booking"
+                      onClick={async () => {
+                        const open = venuePublished[selectedVenueId] !== undefined
+                          ? venuePublished[selectedVenueId]
+                          : venues.find((venue) => venue.venueId === selectedVenueId)?.published !== false
+                        const result = await patchVenue(selectedVenueId, { published: !open })
+                        if (!result?.error) {
+                          setVenuePublished((current) => ({ ...current, [selectedVenueId]: !open }))
+                        }
+                      }}
+                    >
+                      {(venuePublished[selectedVenueId] !== undefined
+                        ? venuePublished[selectedVenueId]
+                        : venues.find((venue) => venue.venueId === selectedVenueId)?.published !== false)
+                        ? 'Public booking'
+                        : 'Venue excluded from public booking'}
+                    </Button>
+                  ) : null}
+                </Stack>
               </Box>
               <Table
                 size="small"
@@ -458,6 +485,26 @@ export default function FleetPage({ initialTab = 'overview' }) {
                           </Typography>
                         </TableCell>
                         <TableCell>
+                          <Button
+                            size="small"
+                            data-testid={`fleet-public-booking-${instance.instanceId}`}
+                            onClick={async (event) => {
+                              event.stopPropagation()
+                              const included = publicBooking[instance.instanceId] !== undefined
+                                ? publicBooking[instance.instanceId]
+                                : instance.publicBooking !== false
+                              const result = await setDevicePublicBooking(instance.instanceId, !included)
+                              if (!result?.error) {
+                                setPublicBooking((current) => ({ ...current, [instance.instanceId]: !included }))
+                              }
+                            }}
+                          >
+                            {(publicBooking[instance.instanceId] !== undefined
+                              ? publicBooking[instance.instanceId]
+                              : instance.publicBooking !== false)
+                              ? 'Public booking'
+                              : 'Excluded from public booking'}
+                          </Button>
                           <Chip
                             size="small"
                             label={instance.status}
