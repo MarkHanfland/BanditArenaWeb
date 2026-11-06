@@ -78,6 +78,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
 
   // FR-SW-SAFE-010 / SVC-017: use the model's published limits; the device stays authoritative.
   useEffect(() => {
+    if (deviceOnline !== true) return undefined
     let active = true
     listCatalogModels().then(({ data }) => {
       const model = (data?.products || []).find((p) => p.productId === DEVICE_PRODUCT_ID)
@@ -86,7 +87,7 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
     return () => {
       active = false
     }
-  }, [])
+  }, [deviceOnline])
 
   const loadMedia = useCallback(async () => {
     const { data, error } = await listMedia()
@@ -107,9 +108,10 @@ export function PlayerSessionProvider({ children, deviceOnline = true, onSession
   }, [])
 
   useEffect(() => {
+    if (deviceOnline !== true) return
     loadPlayers()
     loadMedia()
-  }, [loadPlayers, loadMedia])
+  }, [deviceOnline, loadPlayers, loadMedia])
 
   useEffect(() => {
     if (!deviceOnline) {

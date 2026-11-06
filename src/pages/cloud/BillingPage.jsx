@@ -29,6 +29,7 @@ import {
   getModelInventoryPreset,
   getRevenueReport,
   listBillingCycles,
+  listBillingInvoices,
   createBillingCycle,
   generateBillingInvoice,
   reconcileBillingCycle,
@@ -38,6 +39,7 @@ import {
   listCommerceOrders,
   listCommerceQuotes,
   listLicensePlans,
+  upsertLicensePlan,
   listLicenses,
   listProductInstances,
   renewLicense,
@@ -68,13 +70,28 @@ function typeColor(t) {
   return 'default'
 }
 
+/** A customer's own billing staff (Account Owner, Billing Admin), as opposed to Bandit staff. */
+function isTenantBilling(caps) {
+  return Boolean(caps.billingAdmin && !caps.cloudAdmin && !caps.fleetAdmin)
+}
+
+function dateLabel(value) {
+  const ms = Date.parse(value || '')
+  if (!Number.isFinite(ms)) return '—'
+  return new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 /** Commerce tabs and the FR-SW-AUTH-010 side each one calls. */
 function visibleTabs(caps) {
+  const tenant = isTenantBilling(caps)
   return [
-    { value: 'offerings', label: 'Offerings', show: true },
+    // PM review: a customer's Account Owner or Billing Admin lands on their own invoices,
+    // not on Bandit's price list. Internal Models & BOM stays with Bandit staff.
+    { value: 'invoices', label: 'Invoices', show: tenant },
+    { value: 'offerings', label: tenant ? 'Order from Bandit' : 'Offerings', show: true },
     { value: 'quotes', label: 'Quotes', show: caps.venueAdmin },
-    { value: 'models', label: 'Models & BOM', show: true },
-    { value: 'licensing', label: 'Licensing', show: caps.fleetAdmin },
+    { value: 'models', label: 'Models & BOM', show: !tenant },
+    { value: 'licensing', label: 'Licensing', show: caps.fleetAdmin || caps.cloudAdmin },
     { value: 'cycles', label: 'Cycles', show: caps.cloudAdmin },
     { value: 'revenue', label: 'Revenue', show: caps.cloudAdmin },
   ].filter((t) => t.show)
@@ -95,6 +112,7 @@ export default function BillingPage() {
   const [selectedModel, setSelectedModel] = useState('bandit-arena-core')
   const [revenue, setRevenue] = useState(null)
   const [cycles, setCycles] = useState([])
+  const [invoices, setInvoices] = useState([])
   const [licenses, setLicenses] = useState([])
   const [plans, setPlans] = useState([])
   const [instances, setInstances] = useState([])
@@ -108,6 +126,8 @@ export default function BillingPage() {
   const [quoteOpen, setQuoteOpen] = useState(false)
   const [quoteSku, setQuoteSku] = useState('BA-CORE-BUNDLE')
   const [quoteQty, setQuoteQty] = useState(2)
+  const [planEdit, setPlanEdit] = useState(null)
+  const caps = cloudCapabilities(user)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -122,6 +142,7 @@ export default function BillingPage() {
       licensesRes,
       plansRes,
       instancesRes,
+      invoicesRes,
     ] = await Promise.all([
       listCommerceOfferings(),
       listCommerceOrders(),
@@ -132,8 +153,10 @@ export default function BillingPage() {
       listLicenses(),
       listLicensePlans(),
       listProductInstances(),
+      listBillingInvoices(),
     ])
     if (offeringsRes.error) setError(offeringsRes.error)
+    setInvoices(invoicesRes.data?.invoices || [])
     setOfferings(offeringsRes.data?.offerings || [])
     setOrders(ordersRes.data?.orders || [])
     setQuotes(quotesRes.data?.quotes || [])
@@ -174,6 +197,18 @@ export default function BillingPage() {
     setIssueOpen(false)
     setInstanceId('')
     setMessage(`Issued ${data?.license?.licenseId} (${data?.license?.licenseTier})`)
+    await loadAll()
+  }
+
+  const savePlan = async () => {
+    if (!planEdit) return
+    const { error: apiError } = await upsertLicensePlan(planEdit.planId, {
+      name: planEdit.name,
+      maxDevices: Number(planEdit.maxDevices),
+      features: String(planEdit.features || '').split(',').map((item) => item.trim()).filter(Boolean),
+    })
+    setMessage(apiError || `Updated plan ${planEdit.planId}`)
+    setPlanEdit(null)
     await loadAll()
   }
 
@@ -280,9 +315,13 @@ export default function BillingPage() {
 
   return (
     <PageScaffold
-      title="Commerce"
+      title={isTenantBilling(caps) ? 'Payments & Billing' : 'Commerce'}
       category="Cloud"
-      description="Offerings, enterprise quotes (no payment), billing cycles, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017)."
+      description={
+        isTenantBilling(caps)
+          ? 'Your Bandit invoices, quotes, and orders for parts and add-ons.'
+          : 'Offerings, enterprise quotes (no payment), billing cycles, Core/Pro BOM, licensing, and Bandit revenue streams (SVC-001/002/006/017).'
+      }
     >
       {loading && <CircularProgress size={24} />}
       {error && <Alert severity="error">{error}</Alert>}
@@ -303,6 +342,45 @@ export default function BillingPage() {
           <Tab key={t.value} label={t.label} value={t.value} data-testid={`commerce-tab-${t.value}`} />
         ))}
       </Tabs>
+
+      {!loading && tab === 'invoices' && (
+        <Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            Invoices Bandit has issued to your account. Payment methods and online payment arrive with Stripe billing (Beta 1).
+          </Typography>
+          <Table size="small" data-testid="billing-invoices-table">
+            <TableHead>
+              <TableRow>
+                <TableCell>Invoice</TableCell>
+                <TableCell>Issued</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Download</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {invoices.map((inv) => (
+                <TableRow key={inv.invoiceId}>
+                  <TableCell>{inv.invoiceId}</TableCell>
+                  <TableCell>{dateLabel(inv.createdAt)}</TableCell>
+                  <TableCell>{inv.status || inv.paymentStatus || 'issued'}</TableCell>
+                  <TableCell align="right">{usd(inv.totalUsd)}</TableCell>
+                  <TableCell align="right">
+                    {inv.downloadUrl ? (
+                      <Button size="small" href={inv.downloadUrl} target="_blank" rel="noreferrer">PDF</Button>
+                    ) : '—'}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {invoices.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} data-testid="billing-invoices-empty">No invoices yet.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Stack>
+      )}
 
       {!loading && tab === 'offerings' && (
         <Stack spacing={2}>
@@ -474,6 +552,19 @@ export default function BillingPage() {
                       : 'All published titles'}
                   </TableCell>
                   <TableCell>{plan.maxDevices ?? '—'}</TableCell>
+                  {caps.cloudAdmin ? (
+                    <TableCell>
+                      <Button size="small" data-testid={`edit-plan-${plan.planId}`} onClick={() => setPlanEdit({
+                        planId: plan.planId,
+                        name: plan.name || plan.planId,
+                        maxDevices: plan.maxDevices ?? 1,
+                        features: (plan.features || []).join(', '),
+                      })}
+                      >
+                        Edit
+                      </Button>
+                    </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
             </TableBody>
@@ -772,6 +863,20 @@ export default function BillingPage() {
           <Button variant="contained" onClick={handleQuote} data-testid="quote-submit">
             Save quote
           </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(planEdit)} onClose={() => setPlanEdit(null)}>
+        <DialogTitle>Edit license plan</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1, minWidth: 320 }}>
+            <TextField label="Name" value={planEdit?.name || ''} onChange={(event) => setPlanEdit((current) => ({ ...current, name: event.target.value }))} inputProps={{ 'data-testid': 'plan-name' }} />
+            <TextField label="Max devices" type="number" value={planEdit?.maxDevices ?? 1} onChange={(event) => setPlanEdit((current) => ({ ...current, maxDevices: event.target.value }))} inputProps={{ 'data-testid': 'plan-max-devices' }} />
+            <TextField label="Features" value={planEdit?.features || ''} onChange={(event) => setPlanEdit((current) => ({ ...current, features: event.target.value }))} inputProps={{ 'data-testid': 'plan-features' }} />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPlanEdit(null)}>Cancel</Button>
+          <Button variant="contained" onClick={savePlan} data-testid="plan-save">Save plan</Button>
         </DialogActions>
       </Dialog>
     </PageScaffold>

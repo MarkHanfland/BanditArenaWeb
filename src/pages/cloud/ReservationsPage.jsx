@@ -1,387 +1,477 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Alert,
+  Box,
   Button,
-  Chip,
-  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   MenuItem,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from '@mui/material'
+import DarkDateField from '../../components/shared/DarkDateField'
 import PageScaffold from '../../components/shared/PageScaffold'
 import {
   bookReservation,
+  createGroupInvitation,
+  listMedia,
   cancelReservation,
   checkInReservation,
-  createReservationSlot,
-  listReservations,
+  getVenueAvailability,
+  listPlayGroups,
   listUsers,
-  markReservationNoShow,
-  sendNotification,
 } from '../../api/cloud'
-import { rememberPlayer } from '../../session/lastPlayers'
+import { useVenue } from '../../session/VenueContext'
 
-function dayKey(iso) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return 'Unknown'
-  return d.toLocaleDateString(undefined, {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+function overlaps(start, end, slotStart, slotEnd) {
+  return Date.parse(start) < Date.parse(slotEnd) && Date.parse(end) > Date.parse(slotStart)
 }
 
-function statusColor(status) {
-  if (status === 'available') return 'success'
-  if (status === 'booked') return 'primary'
-  if (status === 'checked_in') return 'info'
-  if (status === 'cancelled' || status === 'no_show') return 'default'
-  return 'default'
+function columnsFrom(open, close) {
+  const start = Date.parse(open || '')
+  const end = Date.parse(close || '')
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return []
+  const columns = []
+  for (let cursor = start; cursor + 30 * 60 * 1000 <= end; cursor += 30 * 60 * 1000) {
+    columns.push({
+      startTime: new Date(cursor).toISOString(),
+      endTime: new Date(cursor + 30 * 60 * 1000).toISOString(),
+    })
+  }
+  return columns
+}
+
+function clockFace(iso, timezone) {
+  const ms = Date.parse(iso || '')
+  if (!Number.isFinite(ms)) return { label: '', period: '' }
+  const parts = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hourCycle: 'h12',
+    timeZone: timezone || undefined,
+  }).formatToParts(new Date(ms))
+  const hour = parts.find((part) => part.type === 'hour')?.value || ''
+  const minute = parts.find((part) => part.type === 'minute')?.value || '00'
+  const period = (parts.find((part) => part.type === 'dayPeriod')?.value || '').toUpperCase()
+  return { label: `${hour}:${minute}`, period }
+}
+
+function periodGroups(columns, timezone) {
+  const groups = []
+  for (const column of columns) {
+    const period = clockFace(column.startTime, timezone).period || 'AM'
+    const last = groups[groups.length - 1]
+    if (last && last.period === period) last.count += 1
+    else groups.push({ period, count: 1 })
+  }
+  return groups
+}
+
+function Portrait({ src, alt }) {
+  if (!src) return null
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt={alt}
+      sx={{ width: 28, height: 28, borderRadius: '50%', mr: 1, objectFit: 'cover' }}
+    />
+  )
+}
+
+function todayKey() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
 }
 
 export default function ReservationsPage() {
+  const venueCtx = useVenue()
+  const venueId = venueCtx?.venueId || ''
+  const [date, setDate] = useState(todayKey)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [slots, setSlots] = useState([])
-  const [users, setUsers] = useState([])
-  const [selectedUserId, setSelectedUserId] = useState('')
   const [message, setMessage] = useState('')
-  const [messageSeverity, setMessageSeverity] = useState('info')
-  const [busySlotId, setBusySlotId] = useState('')
-  const [newSlotStart, setNewSlotStart] = useState('')
-  const [newSlotDuration, setNewSlotDuration] = useState(60)
-  const [creating, setCreating] = useState(false)
+  const [grid, setGrid] = useState(null)
+  const [users, setUsers] = useState([])
+  const [groups, setGroups] = useState([])
+  const [selection, setSelection] = useState(null)
+  const [bookOpen, setBookOpen] = useState(false)
+  const [detail, setDetail] = useState(null)
+  const [playerId, setPlayerId] = useState('')
+  const [groupId, setGroupId] = useState('')
+  const [inviteIds, setInviteIds] = useState([])
+  const [mediaChoices, setMediaChoices] = useState([])
+  const [mediaId, setMediaId] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [reservationsRes, usersRes] = await Promise.all([listReservations(), listUsers()])
-      if (reservationsRes.error || usersRes.error) {
-        setError(reservationsRes.error || usersRes.error)
-        setSlots([])
-        setUsers([])
-      } else {
-        setSlots(reservationsRes.data?.reservations || [])
-        const activeUsers = (usersRes.data?.users || []).filter((u) => u.enrollmentState === 'active')
-        setUsers(activeUsers)
-        if (activeUsers.length > 0) {
-          setSelectedUserId((prev) =>
-            prev && activeUsers.some((u) => u.userId === prev) ? prev : activeUsers[0].userId,
-          )
-        }
-        setError('')
-      }
-    } catch (err) {
-      setError(err?.message || 'Failed to load reservations')
-      setSlots([])
-      setUsers([])
-    } finally {
+  const load = useCallback(async () => {
+    if (!venueCtx?.ready) return
+    if (!venueId) {
+      setGrid(null)
       setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
-  const slotsByDay = useMemo(() => {
-    const sorted = [...slots].sort((a, b) => {
-      const aTime = new Date(a.startTime).getTime()
-      const bTime = new Date(b.startTime).getTime()
-      return (Number.isNaN(aTime) ? 0 : aTime) - (Number.isNaN(bTime) ? 0 : bTime)
-    })
-    const groups = new Map()
-    for (const slot of sorted) {
-      const key = dayKey(slot.startTime)
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key).push(slot)
-    }
-    return [...groups.entries()]
-  }, [slots])
-
-  const flash = (text, severity = 'info') => {
-    setMessageSeverity(severity)
-    setMessage(text)
-  }
-
-  const handleBook = async (slotId) => {
-    setBusySlotId(slotId)
-    flash('')
-    try {
-      const { data, error: apiError } = await bookReservation({ slotId, userId: selectedUserId })
-      if (apiError) {
-        flash(apiError, 'error')
-        return
-      }
-      if (!data?.notification) {
-        await sendNotification({
-          userId: selectedUserId,
-          template: 'session_reminder',
-          channel: 'email',
-          variables: { slotId },
-        })
-      }
-      const bookedUser = users.find((user) => user.userId === selectedUserId)
-      rememberPlayer({
-        userId: selectedUserId,
-        displayName: bookedUser?.name || selectedUserId,
-      })
-      const confirmNote =
-        data?.notification?.status === 'failed'
-          ? 'Confirmation enqueue failed (booking kept).'
-          : 'Confirmation queued.'
-      flash(
-        `Booked ${data?.reservation?.slotId || slotId} for ${bookedUser?.name || selectedUserId}. ${confirmNote}`,
-        'success',
-      )
-      await loadData()
-    } catch (err) {
-      flash(err?.message || 'Booking failed', 'error')
-    } finally {
-      setBusySlotId('')
-    }
-  }
-
-  const runSlotAction = async (slotId, action, label) => {
-    setBusySlotId(slotId)
-    flash('')
-    try {
-      const { data, error: apiError } = await action()
-      if (apiError) {
-        flash(apiError, 'error')
-        return
-      }
-      const confirmNote =
-        data?.notification?.status === 'failed'
-          ? ' Confirmation enqueue failed (change kept).'
-          : data?.notification
-            ? ' Confirmation queued.'
-            : ''
-      flash(`${label} ${slotId}.${confirmNote}`, 'success')
-      await loadData()
-    } catch (err) {
-      flash(err?.message || `${label} failed`, 'error')
-    } finally {
-      setBusySlotId('')
-    }
-  }
-
-  const handleCreateSlot = async () => {
-    if (!newSlotStart) {
-      flash('Pick a start time for the new slot', 'error')
       return
     }
-    setCreating(true)
-    flash('')
-    try {
-      const start = new Date(newSlotStart)
-      if (Number.isNaN(start.getTime())) {
-        flash('Invalid start time', 'error')
-        return
-      }
-      const end = new Date(start.getTime() + Number(newSlotDuration || 60) * 60_000)
-      const { data, error: apiError } = await createReservationSlot({
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-        durationMinutes: Number(newSlotDuration) || 60,
-      })
-      if (apiError) {
-        flash(apiError, 'error')
-        return
-      }
-      flash(`Created slot ${data?.reservation?.slotId || data?.slot?.slotId || ''}`, 'success')
-      setNewSlotStart('')
-      await loadData()
-    } catch (err) {
-      flash(err?.message || 'Failed to create slot', 'error')
-    } finally {
-      setCreating(false)
+    setLoading(true)
+    setGrid(null)
+    setError('')
+    const [availability, people, playGroups, titles] = await Promise.all([
+      getVenueAvailability(venueId, date),
+      listUsers(),
+      listPlayGroups(),
+      listMedia(),
+    ])
+    if (availability.error) {
+      setError(availability.error)
+      setGrid(null)
+      setLoading(false)
+      return
     }
+    setGrid(availability.data || null)
+    const active = (people.data?.users || []).filter((user) => user.enrollmentState === 'active')
+    setUsers(active)
+    setPlayerId((current) => current || active[0]?.userId || '')
+    const bookable = (playGroups.data?.groups || []).filter((group) => (group.memberUserIds || []).length >= 2)
+    setGroups(bookable)
+    setMediaChoices(titles.data?.media || [])
+    setLoading(false)
+  }, [date, venueCtx?.ready, venueId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const columns = useMemo(() => columnsFrom(grid?.open, grid?.close), [grid])
+  const machines = grid?.machines || []
+  const reservations = grid?.reservations || []
+  const timezone = grid?.timezone
+
+  const reservationAt = (machineId, column) => reservations.find((item) => (
+    item.resourceId === machineId && overlaps(item.startTime, item.endTime, column.startTime, column.endTime)
+  ))
+
+  const userName = (userId) => users.find((user) => user.userId === userId)?.name || userId || 'Player'
+
+  const toggleCell = (machineId, index) => {
+    const column = columns[index]
+    const booked = reservationAt(machineId, column)
+    if (booked) {
+      setSelection(null)
+      setDetail(booked)
+      return
+    }
+    if (Date.parse(column.endTime) <= Date.now()) return
+    setSelection((current) => {
+      if (!current || current.machineId !== machineId) {
+        return { machineId, indexes: [index] }
+      }
+      const indexes = current.indexes.includes(index)
+        ? current.indexes.filter((value) => value !== index)
+        : [...current.indexes, index].sort((a, b) => a - b)
+      if (!indexes.length) return null
+      const contiguous = indexes.every((value, position) => position === 0 || value === indexes[position - 1] + 1)
+      const free = indexes.every((value) => !reservationAt(machineId, columns[value]))
+      if (!contiguous || !free) return { machineId, indexes: [index] }
+      return { machineId, indexes }
+    })
+  }
+
+  const selectedRange = () => {
+    if (!selection?.indexes?.length) return null
+    const first = columns[selection.indexes[0]]
+    const last = columns[selection.indexes[selection.indexes.length - 1]]
+    return { machineId: selection.machineId, startTime: first.startTime, endTime: last.endTime }
+  }
+
+  const book = async () => {
+    const range = selectedRange()
+    if (!range) return
+    setBusy(true)
+    setMessage('')
+    let result
+    if (groupId) {
+      if (!inviteIds.length || !mediaId) {
+        setBusy(false)
+        setMessage('Choose the players to invite and a title. They accept by picking a free machine.')
+        return
+      }
+      result = await createGroupInvitation(groupId, {
+        userIds: inviteIds,
+        mediaId,
+        startTime: range.startTime,
+        endTime: range.endTime,
+      })
+    } else {
+      result = await bookReservation({
+        userId: playerId,
+        resourceId: range.machineId,
+        startTime: range.startTime,
+        endTime: range.endTime,
+        venueId,
+      })
+    }
+    setBusy(false)
+    if (result.error) {
+      setMessage(result.error)
+      return
+    }
+    setBookOpen(false)
+    setSelection(null)
+    setGroupId('')
+    setMessage(groupId ? 'Invitations sent. Players are not booked until they accept a machine.' : 'Reservation booked')
+    await load()
+  }
+
+  const cancel = async () => {
+    if (!detail?.slotId) return
+    setBusy(true)
+    const result = await cancelReservation(detail.slotId)
+    setBusy(false)
+    if (result.error) {
+      setMessage(result.error)
+      return
+    }
+    setDetail(null)
+    setMessage('Reservation cancelled')
+    await load()
+  }
+
+  const startSession = async () => {
+    if (!detail?.slotId) return
+    setBusy(true)
+    const result = await checkInReservation(detail.slotId)
+    setBusy(false)
+    if (result.error) {
+      setMessage(result.error)
+      return
+    }
+    setDetail(null)
+    setMessage(result.data?.group?.groupWaiting
+      ? 'Checked in. The session waits until every player in the group is checked in.'
+      : 'Session started')
+    await load()
+  }
+
+  const canStart = (item) => {
+    if (!item || item.status !== 'booked') return false
+    const start = Date.parse(item.startTime)
+    const end = Date.parse(item.endTime)
+    const holdMs = (Number(grid?.holdMinutes) > 0 ? Number(grid.holdMinutes) : 10) * 60 * 1000
+    const now = Date.now()
+    return now >= start - holdMs && now <= end
   }
 
   return (
     <PageScaffold
       title="Reservations"
-      category="Cloud"
-      description="Staff session calendar — book, check in, cancel, and create slots (SVC-009)."
+      category="Operations"
+      description="Book a player or a group on adjacent half-hour slots. Click a reservation to review, cancel, or start it."
     >
-      {loading && <CircularProgress size={24} />}
-      {error && (
-        <Alert
-          severity="error"
-          sx={{ mb: 2 }}
-          action={
-            <Button color="inherit" size="small" onClick={loadData}>
-              Retry
-            </Button>
-          }
-        >
-          {error}
-        </Alert>
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {message && <Alert severity="info" sx={{ mb: 2 }} data-testid="reservations-message">{message}</Alert>}
+      <Stack direction="row" spacing={2} sx={{ mb: 2 }} alignItems="center">
+        <DarkDateField
+          label="Date"
+          testId="reservation-date"
+          value={date}
+          onChange={(event) => setDate(event.target.value)}
+        />
+        {timezone && (
+          <Typography variant="body2" data-testid="reservation-timezone">
+            Venue time ({timezone})
+          </Typography>
+        )}
+        {selection && (
+          <Button variant="contained" data-testid="reservation-book-open" onClick={() => setBookOpen(true)}>
+            Book {selection.indexes.length * 30} min
+          </Button>
+        )}
+      </Stack>
+      {(!venueCtx?.ready || loading) && !error && (
+        <Typography>Loading the day…</Typography>
       )}
-      {message && (
-        <Alert severity={messageSeverity} sx={{ mb: 2 }} onClose={() => setMessage('')}>
-          {message}
-        </Alert>
+      {venueCtx?.ready && !loading && !venueId && !error && (
+        <Typography>No venue is assigned to this login.</Typography>
       )}
-      {!loading && !error && (
-        <Stack spacing={3}>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="flex-start">
+      {!loading && grid?.closed && <Alert severity="info">This venue is closed ({grid.closed}).</Alert>}
+      {!loading && grid && !grid.closed && (
+        <Box sx={{ overflowX: 'auto' }} data-testid="reservation-grid">
+          <Box component="table" sx={{ borderCollapse: 'collapse', minWidth: 720 }}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{ textAlign: 'left', padding: 8 }}>Machine</th>
+                {periodGroups(columns, timezone).map((group, index) => (
+                  <th
+                    key={`${group.period}-${index}`}
+                    colSpan={group.count}
+                    data-testid={`reservation-period-${group.period}`}
+                    style={{
+                      padding: '6px 8px',
+                      background: group.period === 'PM' ? '#6b4c9a' : '#1f6f78',
+                      color: '#ffffff',
+                      letterSpacing: '0.08em',
+                      fontWeight: 700,
+                    }}
+                  >
+                    {group.period}
+                  </th>
+                ))}
+              </tr>
+              <tr>
+                {columns.map((column) => (
+                  <th key={column.startTime} style={{ padding: 8, fontWeight: 500 }}>
+                    {clockFace(column.startTime, timezone).label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {machines.map((machine) => (
+                <tr key={machine.instanceId}>
+                  <td style={{ padding: 8, whiteSpace: 'nowrap' }}>{machine.displayName}</td>
+                  {columns.map((column, index) => {
+                    const booked = reservationAt(machine.instanceId, column)
+                    const selected = selection?.machineId === machine.instanceId && selection.indexes.includes(index)
+                    const past = Date.parse(column.endTime) <= Date.now()
+                    let background = '#1e2420'
+                    if (booked) background = '#1d4e89'
+                    else if (selected) background = '#2d6a4f'
+                    else if (past) background = '#2a2a2a'
+                    return (
+                      <td key={column.startTime} style={{ padding: 4 }}>
+                        <Button
+                          data-testid={`slot-${machine.instanceId}-${index}`}
+                          onClick={() => toggleCell(machine.instanceId, index)}
+                          disabled={!booked && past}
+                          sx={{
+                            minWidth: 88,
+                            minHeight: 42,
+                            bgcolor: background,
+                            color: '#f4fff6',
+                            '&:hover': { bgcolor: background },
+                          }}
+                        >
+                          {booked ? userName(booked.userId) : past ? 'Not Available' : 'Open'}
+                        </Button>
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </Box>
+          {machines.length === 0 && <Typography sx={{ mt: 2 }}>No machines are assigned to this venue.</Typography>}
+        </Box>
+      )}
+
+      <Dialog open={bookOpen} onClose={() => setBookOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Book this time</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               select
-              label="Book as user"
-              size="small"
-              sx={{ minWidth: 280 }}
-              value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-              inputProps={{ 'data-testid': 'book-as-user' }}
+              label="Player"
+              value={playerId}
+              onChange={(event) => { setPlayerId(event.target.value); setGroupId('') }}
+              inputProps={{ 'data-testid': 'reservation-player' }}
+              disabled={Boolean(groupId)}
             >
               {users.map((user) => (
                 <MenuItem key={user.userId} value={user.userId}>
-                  {user.name}
+                  <Portrait src={user.avatarUrl} alt="" />
+                  {user.name || user.userId}
                 </MenuItem>
               ))}
             </TextField>
             <TextField
-              label="New slot start"
-              type="datetime-local"
-              size="small"
-              value={newSlotStart}
-              onChange={(e) => setNewSlotStart(e.target.value)}
-              InputLabelProps={{ shrink: true }}
-              inputProps={{ 'data-testid': 'new-slot-start' }}
-            />
-            <TextField
-              label="Duration (min)"
-              type="number"
-              size="small"
-              sx={{ width: 140 }}
-              value={newSlotDuration}
-              onChange={(e) => setNewSlotDuration(e.target.value)}
-            />
-            <Button
-              variant="outlined"
-              disabled={creating}
-              onClick={handleCreateSlot}
-              data-testid="create-slot"
+              select
+              label="Group"
+              value={groupId}
+              onChange={(event) => setGroupId(event.target.value)}
+              inputProps={{ 'data-testid': 'reservation-group' }}
             >
-              {creating ? 'Creating…' : 'Create slot'}
-            </Button>
-          </Stack>
-
-          {slotsByDay.length === 0 ? (
-            <Typography color="text.secondary">No reservation slots yet.</Typography>
-          ) : (
-            slotsByDay.map(([day, daySlots]) => (
-              <Stack key={day} spacing={1}>
-                <Typography variant="h6" component="h2">
-                  {day}
-                </Typography>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Slot</TableCell>
-                      <TableCell>Start</TableCell>
-                      <TableCell>User</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {daySlots.map((slot) => (
-                      <TableRow key={slot.slotId}>
-                        <TableCell>{slot.slotId}</TableCell>
-                        <TableCell>
-                          {slot.startTime && !Number.isNaN(new Date(slot.startTime).getTime())
-                            ? new Date(slot.startTime).toLocaleTimeString()
-                            : '—'}
-                        </TableCell>
-                        <TableCell>{slot.userId || '—'}</TableCell>
-                        <TableCell>
-                          <Chip size="small" label={slot.status} color={statusColor(slot.status)} />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
-                            {slot.status === 'available' ? (
-                              <Button
-                                size="small"
-                                disabled={busySlotId === slot.slotId || !selectedUserId}
-                                onClick={() => handleBook(slot.slotId)}
-                                data-testid={`book-${slot.slotId}`}
-                              >
-                                Book
-                              </Button>
-                            ) : null}
-                            {slot.status === 'booked' ? (
-                              <>
-                                <Button
-                                  size="small"
-                                  disabled={busySlotId === slot.slotId}
-                                  onClick={() =>
-                                    runSlotAction(
-                                      slot.slotId,
-                                      () => checkInReservation(slot.slotId),
-                                      'Checked in',
-                                    )
-                                  }
-                                  data-testid={`checkin-${slot.slotId}`}
-                                >
-                                  Check in
-                                </Button>
-                                <Button
-                                  size="small"
-                                  disabled={busySlotId === slot.slotId}
-                                  onClick={() =>
-                                    runSlotAction(
-                                      slot.slotId,
-                                      () => cancelReservation(slot.slotId),
-                                      'Cancelled',
-                                    )
-                                  }
-                                  data-testid={`cancel-${slot.slotId}`}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  size="small"
-                                  color="warning"
-                                  disabled={busySlotId === slot.slotId}
-                                  onClick={() =>
-                                    runSlotAction(
-                                      slot.slotId,
-                                      () => markReservationNoShow(slot.slotId),
-                                      'Marked no-show',
-                                    )
-                                  }
-                                  data-testid={`noshow-${slot.slotId}`}
-                                >
-                                  No-show
-                                </Button>
-                              </>
-                            ) : null}
-                            {slot.status !== 'available' && slot.status !== 'booked' ? (
-                              <Typography variant="caption" color="text.secondary">
-                                —
-                              </Typography>
-                            ) : null}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <MenuItem value="">One player</MenuItem>
+              {groups.map((group) => (
+                <MenuItem key={group.groupId} value={group.groupId}>
+                  <Portrait src={group.logoUrl} alt="" />
+                  {group.name} ({group.memberUserIds.length} players)
+                </MenuItem>
+              ))}
+            </TextField>
+            {groupId && (
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="subtitle2">Invite</Typography>
+                  <Button size="small" onClick={() => setInviteIds(groups.find((item) => item.groupId === groupId)?.memberUserIds || [])}>
+                    Invite everyone
+                  </Button>
+                </Stack>
+                {(groups.find((item) => item.groupId === groupId)?.memberUserIds || []).map((id) => (
+                  <label key={id}>
+                    <input
+                      type="checkbox"
+                      checked={inviteIds.includes(id)}
+                      onChange={(event) => setInviteIds((current) => (
+                        event.target.checked ? [...current, id] : current.filter((item) => item !== id)
+                      ))}
+                    />
+                    {' '}{userName(id)}
+                  </label>
+                ))}
+                <TextField
+                  select
+                  label="Title"
+                  value={mediaId}
+                  onChange={(event) => setMediaId(event.target.value)}
+                >
+                  {mediaChoices.map((item) => (
+                    <MenuItem key={item.mediaId} value={item.mediaId}>{item.name || item.mediaId}</MenuItem>
+                  ))}
+                </TextField>
               </Stack>
-            ))
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBookOpen(false)}>Close</Button>
+          <Button variant="contained" data-testid="reservation-book-confirm" disabled={busy || (!groupId && !playerId)} onClick={book}>
+            Book
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(detail)} onClose={() => setDetail(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Reservation</DialogTitle>
+        <DialogContent data-testid="reservation-detail">
+          {detail && (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <Typography>{userName(detail.userId)}</Typography>
+              <Typography>
+                {clockFace(detail.startTime, timezone).label} {clockFace(detail.startTime, timezone).period}
+                {' – '}
+                {clockFace(detail.endTime, timezone).label} {clockFace(detail.endTime, timezone).period}
+              </Typography>
+              <Typography>Status: {detail.status}</Typography>
+              {detail.playGroupId && <Typography>Group booking {detail.playGroupId}</Typography>}
+            </Stack>
           )}
-        </Stack>
-      )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDetail(null)}>Close</Button>
+          {detail && canStart(detail) && (
+            <Button variant="contained" data-testid="reservation-start" disabled={busy} onClick={startSession}>
+              Start session
+            </Button>
+          )}
+          <Button color="warning" data-testid="reservation-cancel" disabled={busy} onClick={cancel}>
+            Cancel reservation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageScaffold>
   )
 }

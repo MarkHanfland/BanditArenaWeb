@@ -43,6 +43,8 @@ attachSessionRecovery(deviceApi, {
   applyAuthorization: (config) => {
     config.headers.Authorization = `Bearer ${_authToken}`
   },
+  // A stopped Bandit Arena process is "Local offline", not a console failure.
+  reportErrors: false,
 })
 
 export default deviceApi

@@ -26,9 +26,10 @@ export function resolveE2eAdminUser(roleId: E2eAdminRole) {
   }
 }
 
-export async function signInAs(page, roleId: E2eAdminRole) {
+export async function signInAs(page, roleId: E2eAdminRole, options: { cloudConsole?: boolean } = {}) {
   const user = resolveE2eAdminUser(roleId);
-  await page.goto('/?e2eAuthBypass=true');
+  const cloud = options.cloudConsole ? '&e2eCloudConsole=true' : '';
+  await page.goto(`/?e2eAuthBypass=true${cloud}`);
   await page.getByTestId('login-username').fill(user.username);
   await page.getByTestId('login-password').fill(user.password);
   await page.getByLabel('Role').click();

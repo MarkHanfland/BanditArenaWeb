@@ -168,24 +168,35 @@ test('fleet activate flow activates a provisioned device', async ({ page }) => {
   await signInAsFleetAdmin(page);
 
   await openMenuItem(page, 'device-fleet', 'menu-fleet');
-  await page.getByTestId('fleet-row-i-provisioned').click();
+  // Click the unit name: the centre of the row is the "Public booking" toggle, which
+  // deliberately does not select the row (stopPropagation).
+  const stagingRow = page.getByTestId('fleet-row-i-provisioned');
+  await stagingRow.getByText('Staging Bay').click();
+  await expect(stagingRow).toHaveClass(/Mui-selected/);
   await page.getByRole('tab', { name: 'Lifecycle' }).click();
   await page.getByTestId('activate-i-provisioned').click();
   await expect(page.getByText('Activated i-provisioned')).toBeVisible();
 });
 
-test('reservation book flow confirms a slot and sets the next player', async ({ page }) => {
+test('reservation grid books an open slot and cancels a booked one', async ({ page }) => {
   await mockCloudApi(page);
   await signInAsVenueAdmin(page);
 
   await openMenuItem(page, 'operations', 'menu-reservations');
   await expect(page.getByRole('heading', { name: 'Reservations' })).toBeVisible();
-  await page.getByTestId('book-slot-001').click();
-  await expect(page.getByText(/Booked slot-001 for Alex Runner/)).toBeVisible();
-  await expect(page.getByText(/Confirmation queued/)).toBeVisible();
-  await page.getByTestId('cancel-slot-001').click();
-  await expect(page.getByText(/Cancelled slot-001/)).toBeVisible();
-  await expect(page.getByText(/Confirmation queued/)).toBeVisible();
+  await expect(page.getByTestId('reservation-grid')).toBeVisible();
+
+  // Tread 2, second half hour is open in the mock grid.
+  await page.getByTestId('slot-instance-2-1').click();
+  await page.getByTestId('reservation-book-open').click();
+  await page.getByTestId('reservation-book-confirm').click();
+  await expect(page.getByTestId('reservations-message')).toContainText('Reservation booked');
+
+  // Tread 1, first half hour holds the mock reservation.
+  await page.getByTestId('slot-instance-1-0').click();
+  await expect(page.getByTestId('reservation-detail')).toBeVisible();
+  await page.getByTestId('reservation-cancel').click();
+  await expect(page.getByTestId('reservations-message')).toContainText('Reservation cancelled');
 });
 
 test('staff assign role records a venue operator', async ({ page }) => {

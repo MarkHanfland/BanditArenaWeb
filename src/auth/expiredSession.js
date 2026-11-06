@@ -1,3 +1,5 @@
+import { noticeFromAxios, reportPageError } from '../pageError.js'
+
 /** A staff or player JWT whose exp has passed. Cognito uses numeric exp; the player portal uses an ISO string. */
 export function jwtExpiryMs(token) {
   const parts = String(token || '').split('.')
@@ -33,10 +35,8 @@ export async function recoverExpiredSession({ status, alreadyRetried, refresh, s
   return 'sign-in'
 }
 
-import { noticeFromAxios, reportPageError } from '../pageError.js'
-
 /** One response path for every console client. Pages do not handle a dead session themselves. */
-export function attachSessionRecovery(client, { refresh, signedIn, onSignIn, applyAuthorization }) {
+export function attachSessionRecovery(client, { refresh, signedIn, onSignIn, applyAuthorization, reportErrors = true }) {
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
@@ -48,7 +48,7 @@ export function attachSessionRecovery(client, { refresh, signedIn, onSignIn, app
         signedIn,
       })
       if (!original || decision === 'stay') {
-        reportPageError(noticeFromAxios(error))
+        if (reportErrors) reportPageError(noticeFromAxios(error))
         return Promise.reject(error)
       }
       original._authRetried = true
@@ -56,8 +56,10 @@ export function attachSessionRecovery(client, { refresh, signedIn, onSignIn, app
         applyAuthorization(original)
         return client(original)
       }
-      reportPageError(noticeFromAxios(error))
-      onSignIn()
+      if (reportErrors) {
+        reportPageError(noticeFromAxios(error))
+        onSignIn()
+      }
       return Promise.reject(error)
     },
   )

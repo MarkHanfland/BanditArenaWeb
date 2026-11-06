@@ -14,6 +14,7 @@ import {
   Toolbar,
   Typography,
 } from '@mui/material'
+import { visuallyHidden } from '@mui/utils'
 import DashboardIcon from '@mui/icons-material/Dashboard'
 import SpeedIcon from '@mui/icons-material/Speed'
 import DeviceHubIcon from '@mui/icons-material/DeviceHub'
@@ -33,6 +34,7 @@ import InsightsIcon from '@mui/icons-material/Insights'
 import HubIcon from '@mui/icons-material/Hub'
 import MovieIcon from '@mui/icons-material/Movie'
 import EventIcon from '@mui/icons-material/Event'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import ExpandLess from '@mui/icons-material/ExpandLess'
 import ExpandMore from '@mui/icons-material/ExpandMore'
 import TimelineIcon from '@mui/icons-material/Timeline'
@@ -67,17 +69,19 @@ import AccountsPage from './pages/cloud/AccountsPage'
 import UsagePage from './pages/cloud/UsagePage'
 import FleetPage from './pages/cloud/FleetPage'
 import ReservationsPage from './pages/cloud/ReservationsPage'
+import VenueHoursPage from './pages/cloud/VenueHoursPage'
 import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
 
 import { useAuth } from './auth/useAuth'
-import { filterMenuGroups } from './auth/rolePermissions'
+import { canOperateDevice, extractGroupsFromUser, filterMenuGroups } from './auth/rolePermissions'
 import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
 import DeviceStatusBand from './components/shared/DeviceStatusBand'
 import ScopeSwitcher from './components/shared/ScopeSwitcher'
 import ConsoleErrorBoundary from './components/shared/ConsoleErrorBoundary'
 import { PlayerSessionProvider, SESSION_PHASE, usePlayerSession } from './session/PlayerSessionContext'
+import { HeaderVenueSelect, useVenue, VenueProvider } from './session/VenueContext'
 import { isCloudDeployment } from './config/runtime'
 import { jwtExpiryMs, recoverExpiredSession } from './auth/expiredSession'
 import { useOfflineSession } from './auth/useOfflineSession'
@@ -112,6 +116,7 @@ const IMPLEMENTED_PANELS = {
   media: () => <MediaPage />,
   users: () => <UsersPage />,
   reservations: () => <ReservationsPage />,
+  'venue-hours': () => <VenueHoursPage />,
   staff: () => <StaffPage />,
   accounts: () => <AccountsPage />,
   billing: () => <BillingPage />,
@@ -128,6 +133,7 @@ const MENU_ICONS = {
   events: <ReportProblemIcon />,
   config: <TuneIcon />,
   reservations: <EventIcon />,
+  'venue-hours': <CalendarMonthIcon />,
   users: <GroupIcon />,
   staff: <ManageAccountsIcon />,
   sessions: <TimelineIcon />,
@@ -185,6 +191,7 @@ function TabPanel({ children, isActive, noPadding = false, scrollable = false })
             overflowX: 'hidden',
             boxSizing: 'border-box',
           }}
+          tabIndex={scrollable ? 0 : undefined}
         >
           {children}
         </Box>
@@ -235,6 +242,10 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     [visibleMenuGroups],
   )
   const activeItem = allItems.find((item) => item.id === activeTab) || allItems[0]
+  // Each page names itself in the tab title (WCAG 2.4.2) because the page heading is in the content.
+  useEffect(() => {
+    document.title = activeItem?.label ? `${activeItem.label} · Bandit Arena Console` : 'Bandit Arena Console'
+  }, [activeItem?.label])
   const isDeviceTab = DEVICE_ITEM_IDS.has(activeTab)
 
   const expandGroup = useCallback((groupId) => {
@@ -315,6 +326,8 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     }
   }, [deviceOnline, isDeviceTab, visibleMenuGroups, expandGroup, setActiveTab])
 
+  // Device chrome (status band, Safety Stop) is for roles that hold a Local Device menu.
+  const showDeviceChrome = user ? canOperateDevice(user) : true
   const isSafetyStopState = treadmillState === 3
   const isOperatingState = treadmillState === 2
   // Safety Start is only a resume after e-stop during an active player session.
@@ -463,10 +476,15 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   const handleSafetyAction = showSafetyStart ? handleSafetyStart : handleSafetyStop
 
   return (
+    <VenueProvider
+      username={user?.username}
+      groups={extractGroupsFromUser(user)}
+      deviceOnline={deviceOnline === true}
+    >
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
       <AppBar position="static" elevation={0} sx={{ flexShrink: 0 }}>
-        <Toolbar>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
+        <Toolbar sx={{ gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, lg: 2 }, flexGrow: 1, minWidth: 0 }}>
             <img src="/BanditLogo.svg" alt="Bandit Logo" style={{ height: '48px', width: 'auto' }} />
             <Typography
               variant="h4"
@@ -477,11 +495,18 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
                 letterSpacing: '1px',
                 textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)',
                 whiteSpace: 'nowrap',
+                fontSize: { xs: '1.35rem', lg: '2.125rem' },
               }}
             >
               BANDIT ARENA
             </Typography>
-            <Chip icon={<CloudQueueIcon />} size="small" label="Unified Console" variant="outlined" />
+            <Chip
+              icon={<CloudQueueIcon />}
+              size="small"
+              label="Unified Console"
+              variant="outlined"
+              sx={{ display: { xs: 'none', lg: 'inline-flex' } }}
+            />
             {deviceOnline === false && (
               <Chip
                 size="small"
@@ -494,21 +519,25 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
             )}
           </Box>
           {user && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Button
-                variant="contained"
-                color={safetyButtonColor}
-                size="small"
-                startIcon={isSafetyControlBusy ? <CircularProgress size={14} color="inherit" /> : safetyButtonIcon}
-                onClick={handleSafetyAction}
-                disabled={safetyButtonDisabled}
-                data-testid="safety-control"
-                sx={{ borderRadius: 999, px: 1.5, fontWeight: 700 }}
-              >
-                {safetyButtonLabel}
-              </Button>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+              {showDeviceChrome && (
+                <Button
+                  variant="contained"
+                  color={safetyButtonColor}
+                  size="small"
+                  startIcon={isSafetyControlBusy ? <CircularProgress size={14} color="inherit" /> : safetyButtonIcon}
+                  onClick={handleSafetyAction}
+                  disabled={safetyButtonDisabled}
+                  data-testid="safety-control"
+                  // The stop control never wraps or shrinks, at any width (tablet included).
+                  sx={{ borderRadius: 999, px: 1.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}
+                >
+                  {safetyButtonLabel}
+                </Button>
+              )}
               {isCloudDeployment() && <ScopeSwitcher onChange={handleScopeChange} />}
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              {isCloudDeployment() && <HeaderVenueSelect />}
+              <Typography variant="body2" sx={{ opacity: 0.8, display: { xs: 'none', md: 'block' } }}>
                 {user.username}
               </Typography>
               <Button
@@ -517,6 +546,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
                 startIcon={<LogoutIcon />}
                 onClick={logout}
                 data-testid="sign-out"
+                sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}
               >
                 Sign out
               </Button>
@@ -524,18 +554,47 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
           )}
         </Toolbar>
       </AppBar>
+      {showDeviceChrome && deviceOnline === true && isSafetyStopState && (
+        // A stopped belt is the highest-stakes state: say so across the full width, in words.
+        <Box
+          role="alert"
+          data-testid="safety-stop-banner"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 3,
+            py: 1.25,
+            flexShrink: 0,
+            backgroundColor: '#b71c1c',
+            color: '#ffffff',
+          }}
+        >
+          <StopCircleIcon />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ fontWeight: 800, letterSpacing: '0.04em' }}>SAFETY STOP — the belt is stopped</Typography>
+            <Typography variant="body2">
+              {sessionActive
+                ? 'Check on the Player, then press Start in the header to resume the session.'
+                : 'No Player session is running. Start a session when the Player is ready.'}
+            </Typography>
+          </Box>
+        </Box>
+      )}
       <PageErrorBanner />
 
-      <DeviceStatusBand deviceOnline={deviceOnline === true} />
+      {showDeviceChrome && <DeviceStatusBand deviceOnline={deviceOnline === true} />}
 
       <Box sx={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <Box
+          component="nav"
+          aria-label="Console"
           sx={{
             borderRight: 1,
             borderColor: 'divider',
             backgroundColor: 'background.paper',
-            width: 280,
-            minWidth: 260,
+            width: { xs: 210, lg: 280 },
+            minWidth: { xs: 190, lg: 260 },
             flexShrink: 0,
             overflowY: 'auto',
             overflowX: 'hidden',
@@ -583,18 +642,16 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
                   {canToggle ? (expanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />) : null}
                 </ListItemButton>
                 <Collapse in={expanded} timeout="auto" unmountOnExit>
-                  <List dense sx={{ pt: 0, pb: 0.5 }}>
+                  <List dense component="div" role="group" aria-label={group.label} sx={{ pt: 0, pb: 0.5 }}>
                     {items.map((item) => {
                       const notImplemented = item.implemented === false
-                      const secondary = notImplemented
-                        ? item.phase
-                          ? `Coming soon · ${item.phase}`
-                          : 'Coming soon'
-                        : undefined
+                      // Roadmap leaves stay visible (FR-SW-UI-009) but take one quiet line, not two.
+                      const phaseLabel = notImplemented ? item.phase || 'Soon' : null
                       return (
                         <ListItemButton
                           key={item.id}
                           selected={!notImplemented && activeTab === item.id}
+                          aria-current={!notImplemented && activeTab === item.id ? "page" : undefined}
                           disabled={notImplemented}
                           onClick={() => selectMenuItem(item.id)}
                           sx={{ mx: 1, borderRadius: 1, pl: 2.5 }}
@@ -604,7 +661,19 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
                           <ListItemIcon sx={{ minWidth: 36 }}>
                             {notImplemented ? <LockOutlinedIcon fontSize="small" /> : item.icon}
                           </ListItemIcon>
-                          <ListItemText primary={item.label} secondary={secondary} />
+                          <ListItemText
+                            primary={item.label}
+                            primaryTypographyProps={notImplemented ? { variant: 'body2', noWrap: true } : undefined}
+                          />
+                          {phaseLabel && (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={phaseLabel}
+                              title={`Coming soon · ${phaseLabel}`}
+                              sx={{ height: 18, fontSize: '0.6rem', ml: 0.5 }}
+                            />
+                          )}
                         </ListItemButton>
                       )
                     })}
@@ -616,7 +685,8 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
           })}
         </Box>
 
-        <Box sx={{ flexGrow: 1, py: 0, minHeight: 0, overflow: 'hidden' }}>
+        <Box component="main" id="main" sx={{ flexGrow: 1, py: 0, minHeight: 0, overflow: 'hidden' }}>
+          <Typography component="h1" sx={visuallyHidden}>Bandit Arena Console</Typography>
           <TabPanel
             isActive
             noPadding={activeItem?.id === 'dashboard'}
@@ -626,7 +696,7 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
               {isDeviceTab && deviceOnline === false ? (
                 <DeviceOfflinePanel />
               ) : (
-                <React.Fragment key={scopeKey}>{activeItem?.panel({ treadmillState })}</React.Fragment>
+                <VenueScopedPanel scopeKey={scopeKey}>{activeItem?.panel({ treadmillState })}</VenueScopedPanel>
               )}
             </ConsoleErrorBoundary>
           </TabPanel>
@@ -649,7 +719,13 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
         </Typography>
       </Box>
     </Box>
+    </VenueProvider>
   )
+}
+
+function VenueScopedPanel({ scopeKey, children }) {
+  const venueCtx = useVenue()
+  return <React.Fragment key={`${scopeKey}:${venueCtx?.venueId || 'venue'}`}>{children}</React.Fragment>
 }
 
 function readOperatorIdFromJwt(token) {

@@ -141,7 +141,7 @@ function TreadmillTab() {
                 {treadmillState?.treadSpeed?.toFixed(2) || '0.00'} m/s
               </Typography>
               <Box sx={{ mt: 2, mb: 1 }}>
-                <LinearProgress 
+                <LinearProgress aria-label="Tread speed" 
                   variant="determinate" 
                   value={Math.min(speedProgress, 100)} 
                   sx={{ height: 10, borderRadius: 5 }}
@@ -213,7 +213,7 @@ function TreadmillTab() {
                 {avatarVirtualSpeed.toFixed(2)} m/s
               </Typography>
               <Box sx={{ mt: 2, mb: 1 }}>
-                <LinearProgress
+                <LinearProgress aria-label="Avatar speed"
                   variant="determinate"
                   value={Math.min(avatarVirtualSpeedProgress, 100)}
                   sx={{ height: 10, borderRadius: 5 }}

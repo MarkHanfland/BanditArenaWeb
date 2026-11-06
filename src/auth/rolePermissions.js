@@ -35,6 +35,7 @@ const CLOUD_ADMIN_CLOUD = [
 const FLEET_ADMIN_CLOUD = [
   ...leafIdsInGroups(MENU_GROUP.DEVICE_FLEET, MENU_GROUP.ANALYTICS, MENU_GROUP.ADMINISTRATION),
   'billing',
+  'venue-hours',
 ]
 /** Field Service Technician: support and diagnostics only (Domains 12, 13, 17). */
 const TECHNICIAN_CLOUD = ['support', 'diagnostics']
@@ -116,6 +117,17 @@ export function getAllowedMenuIds(user) {
   const roles = userRoles(user)
   const effective = roles.length ? roles : [deriveUserRole(user)]
   return [...new Set(effective.flatMap((r) => ROLE_PERMISSIONS[r] || []))]
+}
+
+/**
+ * FR-SW-UI-014 (device chrome): true when the user holds any Local Device menu. Only these
+ * roles see the device status band (Player/Media, speeds, Start Session) and the header
+ * Safety Stop. Front Desk, Account Owner, Billing Admin, and Integration Developer have no
+ * Local Device menu, so those controls are hidden rather than shown disabled.
+ */
+export function canOperateDevice(user) {
+  const allowed = new Set(getAllowedMenuIds(user))
+  return DEVICE_MENU_IDS.some((id) => allowed.has(id))
 }
 
 export function filterMenuGroups(menuGroups, user) {

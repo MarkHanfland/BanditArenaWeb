@@ -48,14 +48,12 @@ test('enrollment session history link opens Session History filtered to player',
   await expect(page.getByTestId('session-history-table')).toBeVisible();
 });
 
-test('session history loads by venue without a player first', async ({ page }) => {
+test('session history loads by the locked venue without a player first', async ({ page }) => {
   await mockCloudApi(page, createCloudFixture());
   await signInAsVenueAdmin(page);
 
-  await openMenuItem(page, 'operations', 'menu-sessions');
-  await expect(page.getByRole('heading', { name: 'Session History' })).toBeVisible();
-  await expect(page.getByTestId('session-history-scope-hint')).toBeVisible();
-
+  // A venue admin with one venue is locked to it (no Venue picker), so the venue scope
+  // is satisfied on arrival and the history loads without choosing a Player.
   const listRequest = page.waitForRequest((request) => {
     if (request.method() !== 'GET') return false;
     const url = new URL(request.url());
@@ -67,9 +65,10 @@ test('session history loads by venue without a player first', async ({ page }) =
       !url.searchParams.get('userId')
     );
   });
-  await page.getByLabel('Venue').click();
-  await page.getByRole('option', { name: 'Bandit Arena Lab' }).click();
+  await openMenuItem(page, 'operations', 'menu-sessions');
+  await expect(page.getByRole('heading', { name: 'Session History' })).toBeVisible();
   await listRequest;
+  await expect(page.getByTestId('session-history-scope-hint')).toHaveCount(0);
   await expect(page.getByTestId('session-history-table')).toBeVisible();
   await expect(page.getByText('session-demo-001')).toBeVisible();
   await expect(page.getByTestId('session-history-user-filter')).toHaveValue('');

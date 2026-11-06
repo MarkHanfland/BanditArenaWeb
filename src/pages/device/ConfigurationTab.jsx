@@ -191,8 +191,9 @@ function ConfigField({ fieldKey, value, onChange, disabled }) {
     case 'select':
       return (
         <FormControl fullWidth size="small" disabled={disabled}>
-          <InputLabel>{label}</InputLabel>
+          <InputLabel id={`cfg-${String(label).replace(/\W+/g, '-').toLowerCase()}`}>{label}</InputLabel>
           <Select
+            labelId={`cfg-${String(label).replace(/\W+/g, '-').toLowerCase()}`}
             value={value || ''}
             onChange={(e) => handleChange(e.target.value)}
             label={label}
@@ -681,8 +682,9 @@ function ConfigurationTab({ treadmillState = null }) {
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 2 }}>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>Profile</InputLabel>
+                    <InputLabel id="cfg-profile">Profile</InputLabel>
                     <Select
+                      labelId="cfg-profile"
                       label="Profile"
                       value={config.profile || ''}
                       onChange={(e) => handleProfileChange(e.target.value)}
@@ -694,8 +696,9 @@ function ConfigurationTab({ treadmillState = null }) {
                     </Select>
                   </FormControl>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>Skeleton provider</InputLabel>
+                    <InputLabel id="cfg-skeleton-provider">Skeleton provider</InputLabel>
                     <Select
+                      labelId="cfg-skeleton-provider"
                       label="Skeleton provider"
                       value={config.providers?.skeleton || ''}
                       onChange={(e) => handleProviderChange('skeleton', e.target.value)}
@@ -706,8 +709,9 @@ function ConfigurationTab({ treadmillState = null }) {
                     </Select>
                   </FormControl>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>Motors</InputLabel>
+                    <InputLabel id="cfg-motors">Motors</InputLabel>
                     <Select
+                      labelId="cfg-motors"
                       label="Motors"
                       value={config.providers?.motors || ''}
                       onChange={(e) => handleProviderChange('motors', e.target.value)}
@@ -718,8 +722,9 @@ function ConfigurationTab({ treadmillState = null }) {
                     </Select>
                   </FormControl>
                   <FormControl size="small" fullWidth>
-                    <InputLabel>Tilt</InputLabel>
+                    <InputLabel id="cfg-tilt">Tilt</InputLabel>
                     <Select
+                      labelId="cfg-tilt"
                       label="Tilt"
                       value={config.providers?.tilt || ''}
                       onChange={(e) => handleProviderChange('tilt', e.target.value)}

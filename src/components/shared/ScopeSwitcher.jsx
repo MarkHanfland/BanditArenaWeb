@@ -60,6 +60,7 @@ export default function ScopeSwitcher({ onChange }) {
     setActiveTenant(header)
     writeStored(header)
     setActive(header)
+    window.dispatchEvent(new CustomEvent('bandit:tenant-changed', { detail: { operatorId: header } }))
     onChange?.(header)
   }
 

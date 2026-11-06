@@ -77,7 +77,8 @@ export function createCloudFixture() {
       userId: 'user-demo-001',
       resourceId: 'i1',
     },
-    { slotId: 'slot-001', startTime: '2026-06-10T14:00:00.000Z', status: 'available' },
+    // Relative to now so the fixture never expires (PM review: no hard-coded dates).
+    { slotId: 'slot-001', startTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), status: 'available' },
   ];
   const media = [
     {
@@ -1242,6 +1243,56 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       const body = route.request().postDataJSON();
       license.assignedDeviceId = body.instanceId;
       return json({ license, message: 'License assigned' });
+    }
+
+    if (path === '/play-groups' && method === 'GET') {
+      return json({ groups: [] });
+    }
+    const availability = path.match(/^\/venues\/([^/]+)\/availability$/);
+    if (availability && method === 'GET') {
+      const start = new Date();
+      start.setSeconds(0, 0);
+      start.setMinutes(start.getMinutes() < 30 ? 0 : 30);
+      const slot = (minutes) => new Date(start.getTime() + minutes * 60 * 1000).toISOString();
+      return json({
+        venueId: decodeURIComponent(availability[1]),
+        timezone: 'UTC',
+        open: slot(0),
+        close: slot(90),
+        holdMinutes: 10,
+        machines: [
+          { instanceId: 'instance-1', displayName: 'Tread 1' },
+          { instanceId: 'instance-2', displayName: 'Tread 2' },
+        ],
+        reservations: [{
+          slotId: 'slot-grid-1',
+          resourceId: 'instance-1',
+          startTime: slot(0),
+          endTime: slot(30),
+          status: 'booked',
+          userId: 'user-demo-001',
+        }],
+        slots: [],
+      });
+    }
+    if (path === '/fleet/release-health' && method === 'GET') {
+      return json({
+        channel: 'stable',
+        release: '1.3.0',
+        sessions: 20,
+        crashFreeRate: 0.9,
+        stopped: true,
+        reason: 'crash_free_below_threshold',
+        message: 'Release health',
+      });
+    }
+    const planWrite = path.match(/^\/license-plans\/([^/]+)$/);
+    if (planWrite && method === 'PUT') {
+      const body = route.request().postDataJSON() || {};
+      return json({
+        plan: { planId: planWrite[1], name: body.name, maxDevices: body.maxDevices, features: body.features },
+        message: `Updated plan ${planWrite[1]}`,
+      });
     }
 
     return json({ message: 'stub' });

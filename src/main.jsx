@@ -82,11 +82,11 @@ async function loadAmplifyConfig() {
 const darkTheme = createTheme({
   palette: {
     mode: 'dark',
-    primary: { main: '#4db6c4', light: '#7ed4df', dark: '#2a8a96', contrastText: '#ffffff' },
-    secondary: { main: '#7a8a8f', light: '#a0b0b5', dark: '#556065', contrastText: '#ffffff' },
-    error: { main: '#e05555', light: '#ff8a80', dark: '#b33030' },
-    warning: { main: '#c9a857', light: '#e0c87a', dark: '#a08840' },
-    info: { main: '#5eb8cf', light: '#8ed0e2', dark: '#3a95ab' },
+    primary: { main: '#4db6c4', light: '#7ed4df', dark: '#2a8a96', contrastText: '#0a0c0e' },
+    secondary: { main: '#7a8a8f', light: '#a0b0b5', dark: '#556065', contrastText: '#0a0c0e' },
+    error: { main: '#e05555', light: '#ff8a80', dark: '#b33030', contrastText: '#0a0c0e' },
+    warning: { main: '#c9a857', light: '#e0c87a', dark: '#a08840', contrastText: '#0a0c0e' },
+    info: { main: '#5eb8cf', light: '#8ed0e2', dark: '#3a95ab', contrastText: '#0a0c0e' },
     success: { main: '#00d4aa', light: '#33e0bb', dark: '#00a884', contrastText: '#0a0c0e' },
     background: { default: '#181c20', paper: '#23272b' },
     text: { primary: '#e0e0e0', secondary: '#b0bec5', disabled: '#7b8a97' },

@@ -282,7 +282,8 @@ export default function DeviceStatusBand({ deviceOnline = true }) {
         <SessionStat
           label="TREADMILL"
           value={treadmillInfo.label}
-          color="#00e5ff"
+          // Stop and failure read in red, not the same cyan as a healthy belt.
+          color={operatingState === 3 || operatingState === 1 ? '#ff5252' : '#00e5ff'}
           testId="dashboard-treadmill-state"
         />
         <SessionStat

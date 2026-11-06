@@ -7,8 +7,8 @@ test('treadmillStateInfo maps standby and unknown', () => {
   assert.equal(treadmillStateInfo(null).label, 'Unknown')
 })
 
-test('without a Player session, missing or standby state shows Offline', () => {
+test('without a Player session, a missing state shows Offline and standby stays Standby', () => {
   assert.equal(treadmillStatusForSession(null, { sessionActive: false }).label, 'Offline')
-  assert.equal(treadmillStatusForSession(5, { sessionActive: false }).label, 'Offline')
+  assert.equal(treadmillStatusForSession(5, { sessionActive: false }).label, 'Standby')
   assert.equal(treadmillStatusForSession(2, { sessionActive: true }).label, 'Operating')
 })

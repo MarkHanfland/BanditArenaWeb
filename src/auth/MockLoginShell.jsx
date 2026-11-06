@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
@@ -22,6 +22,31 @@ import {
   ROLE_FRONT_DESK,
 } from './rolePermissions'
 
+const ROLE_ALIAS = {
+  'venue-admin': ROLE_VENUE_ADMIN,
+  venueAdmin: ROLE_VENUE_ADMIN,
+  'bandit-venue-admin': ROLE_VENUE_ADMIN,
+  'front-desk': ROLE_FRONT_DESK,
+  frontDesk: ROLE_FRONT_DESK,
+  'bandit-front-desk': ROLE_FRONT_DESK,
+  'account-owner': ROLE_ACCOUNT_OWNER,
+  accountOwner: ROLE_ACCOUNT_OWNER,
+  'bandit-account-owner': ROLE_ACCOUNT_OWNER,
+  'cloud-admin': ROLE_CLOUD_ADMIN,
+  cloudAdmin: ROLE_CLOUD_ADMIN,
+  'bandit-cloud-admin': ROLE_CLOUD_ADMIN,
+  'fleet-admin': ROLE_FLEET_ADMIN,
+  fleetAdmin: ROLE_FLEET_ADMIN,
+  'bandit-fleet-admin': ROLE_FLEET_ADMIN,
+  'billing-admin': ROLE_BILLING_ADMIN,
+  billingAdmin: ROLE_BILLING_ADMIN,
+  'bandit-billing-admin': ROLE_BILLING_ADMIN,
+  operator: ROLE_OPERATOR,
+  'bandit-operator': ROLE_OPERATOR,
+  technician: ROLE_TECHNICIAN,
+  'bandit-technician': ROLE_TECHNICIAN,
+}
+
 const GROUP_BY_ROLE = {
   [ROLE_OPERATOR]: 'bandit-operator',
   [ROLE_TECHNICIAN]: 'bandit-technician',
@@ -39,6 +64,21 @@ export default function MockLoginShell() {
   const [role, setRole] = useState(ROLE_OPERATOR)
   const [error, setError] = useState('')
   const [session, setSession] = useState(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const username = params.get('e2eUser')
+    const role = ROLE_ALIAS[params.get('e2eRole') || ''] || ROLE_VENUE_ADMIN
+    if (!username || !GROUP_BY_ROLE[role]) return
+    setSession({
+      accessToken: '__e2e_mock_token__',
+      user: {
+        userId: username,
+        username,
+        groups: [GROUP_BY_ROLE[role]],
+      },
+    })
+  }, [])
 
   const handleLogin = () => {
     if (!username.trim() || !password.trim()) {

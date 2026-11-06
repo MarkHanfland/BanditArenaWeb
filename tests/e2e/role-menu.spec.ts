@@ -88,12 +88,15 @@ const roleCases: RoleCase[] = [
       'menu-usage',
       'menu-billing',
       'menu-service-logs',
+      'menu-venue-hours',
       'menu-group-device-fleet',
       'menu-group-analytics',
       'menu-group-administration',
     ],
     expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles', 'menu-audit'],
-    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-group-operations'],
+    // Fleet Administrator owns Venue hours (rolePermissions FLEET_ADMIN_CLOUD), so the
+    // Operations group is present with that single page; every other operations page is not.
+    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-reservations'],
   },
   {
     roleId: 'cloudAdmin',

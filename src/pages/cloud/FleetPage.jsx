@@ -34,6 +34,7 @@ import MachineGlbViewer from '../../components/cloud/MachineGlbViewer'
 import EmergencyPatchDialog from './fleet/EmergencyPatchDialog'
 import {
   checkUpdates,
+  getReleaseHealth,
   getModelInventoryPreset,
   listCatalogModels,
   listCustomers,
@@ -98,6 +99,7 @@ export default function FleetPage({ initialTab = 'overview' }) {
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [releaseHealth, setReleaseHealth] = useState(null)
   const [message, setMessage] = useState('')
   const [messageSeverity, setMessageSeverity] = useState('success')
   const [registerOpen, setRegisterOpen] = useState(false)
@@ -177,6 +179,8 @@ export default function FleetPage({ initialTab = 'overview' }) {
     setBuyerCustomerId((current) => current || nextCustomers[0]?.customerId || '')
     setCatalogModels(modelsRes.data?.products || [])
     setError('')
+    const health = await getReleaseHealth({ channel: 'stable', release: '1.3.0' })
+    if (!health.error && health.data?.release) setReleaseHealth(health.data)
 
     const updates = {}
     await Promise.all(
@@ -280,6 +284,13 @@ export default function FleetPage({ initialTab = 'overview' }) {
               {message}
             </Alert>
           )}
+          {releaseHealth ? (
+            <Alert severity={releaseHealth.stopped ? 'warning' : 'info'} data-testid="release-health">
+              {releaseHealth.stopped
+                ? `Rollout stopped for ${releaseHealth.release}: ${releaseHealth.reason}`
+                : `Release ${releaseHealth.release} crash-free ${Math.round((releaseHealth.crashFreeRate || 0) * 100)}%`}
+            </Alert>
+          ) : null}
 
           <Stack
             direction={{ xs: 'column', md: 'row' }}

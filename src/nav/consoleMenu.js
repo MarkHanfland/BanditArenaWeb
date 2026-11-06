@@ -27,6 +27,7 @@ export const MENU_LEAF_CATALOG = [
   { id: 'config', groupId: MENU_GROUP.LOCAL, label: 'Config', implemented: true },
   // Operations
   { id: 'reservations', groupId: MENU_GROUP.OPERATIONS, label: 'Reservations', implemented: true },
+  { id: 'venue-hours', groupId: MENU_GROUP.OPERATIONS, label: 'Venue hours', implemented: true },
   { id: 'users', groupId: MENU_GROUP.OPERATIONS, label: 'Enrollment / Check-In', implemented: true },
   { id: 'staff', groupId: MENU_GROUP.OPERATIONS, label: 'Staff Management', implemented: true },
   { id: 'sessions', groupId: MENU_GROUP.OPERATIONS, label: 'Session History', implemented: true },

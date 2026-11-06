@@ -16,11 +16,12 @@ export function treadmillStateInfo(state) {
 
 /**
  * Status-bar treadmill label.
- * With no Player session, never show Unknown — show Offline instead.
+ * With no Player session, never show Unknown: show Offline when the state is not known.
+ * Standby is a real state (the machine is ready), so it is never shown as Offline.
  */
 export function treadmillStatusForSession(state, { sessionActive = false } = {}) {
   if (!sessionActive) {
-    if (state == null || TREADMILL_STATE_MAP[state] == null || state === 5) {
+    if (state == null || TREADMILL_STATE_MAP[state] == null) {
       return { label: 'Offline', color: 'default' }
     }
   }

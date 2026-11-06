@@ -24,11 +24,11 @@ import {
   exportSession,
   getSessionMetrics,
   getSessionSafetyEvents,
-  listProductInstances,
   listSessions,
   listUsers,
   listVenues,
 } from '../../api/cloud'
+import { useVenue } from '../../session/VenueContext'
 import {
   consumeSessionHistoryUserFilter,
   peekSessionHistoryUserFilter,
@@ -138,6 +138,8 @@ function hasHistoryScope(userId, venueId, instanceId) {
 }
 
 export default function SessionHistoryPage({ initialUserId = null } = {}) {
+  const venueCtx = useVenue()
+  const lockedVenueId = venueCtx?.venueId || ''
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [loadingSessions, setLoadingSessions] = useState(false)
   const [error, setError] = useState('')
@@ -166,9 +168,8 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
   const loadDirectory = useCallback(async () => {
     setLoadingUsers(true)
     setError('')
-    const [usersRes, instancesRes, venuesRes] = await Promise.all([
+    const [usersRes, venuesRes] = await Promise.all([
       listUsers(),
-      listProductInstances(),
       listVenues(),
     ])
     if (usersRes.error) {
@@ -181,9 +182,6 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
     setUsers(list)
 
     const devices = new Map()
-    for (const instance of instancesRes.data?.instances || []) {
-      if (instance?.instanceId) devices.set(instance.instanceId, instance)
-    }
     setDeviceById(devices)
 
     const venues = new Map()
@@ -283,6 +281,12 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
   }, [])
 
   useEffect(() => {
+    if (!lockedVenueId || venueFilter === lockedVenueId) return
+    setVenueFilter(lockedVenueId)
+    loadHistory({ userId: userFilter, venueId: lockedVenueId, instanceId: instanceFilter })
+  }, [instanceFilter, loadHistory, lockedVenueId, userFilter, venueFilter])
+
+  useEffect(() => {
     const onOpen = (event) => {
       const nextUserId = event?.detail?.userId || ''
       setUserFilter(nextUserId)
@@ -362,6 +366,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
             </MenuItem>
           ))}
         </TextField>
+        {!venueCtx?.locked && (
         <TextField
           select
           size="small"
@@ -391,6 +396,7 @@ export default function SessionHistoryPage({ initialUserId = null } = {}) {
             </MenuItem>
           ))}
         </TextField>
+        )}
         <TextField
           select
           size="small"

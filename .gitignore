@@ -5,6 +5,7 @@ dist/
 # Environment
 .env
 .env.local
+.test-login.local
 
 # Logs
 *.log
@@ -13,6 +14,11 @@ dist/
 test-results/
 playwright-report/
 test_logs/
+
+# Local PM review harness (screenshots + ad hoc Playwright configs); never commit
+tests/pm-review/
+pm-review/
+_pm_review/
 
 # OS
 .DS_Store

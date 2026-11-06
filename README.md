@@ -31,6 +31,15 @@ Start Bandit Arena locally so device pages can reach `http://localhost:9724`.
 
 Cloud pages use `/api/*` (Vite proxy → API Gateway in dev).
 
+Sign in as a dedicated test login (Level 5 venues only, not the public player list):
+
+```powershell
+.\scripts\Start-TestLogin.ps1
+.\scripts\Start-TestLogin.ps1 -Username test-account-owner
+```
+
+The password is `BANDIT_E2E_PASSWORD` or one line in gitignored `.test-login.local`. `Get-Help .\scripts\Start-TestLogin.ps1 -Full` lists each login, its role, and its venues. `-Bypass` opens the local mock shell without Cognito.
+
 ## Authentication
 
 Sign-in uses **Amplify UI Authenticator** on a branded Bandit login page (no redirect to Cognito Hosted UI for username/password). Cognito User Pool SRP handles credentials, MFA, and password reset in-app. OAuth/PKCE settings on the app client remain configured for token scopes, refresh, and global logout via the Hosted UI domain.

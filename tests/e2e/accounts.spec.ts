@@ -45,7 +45,8 @@ test('SW-052: cloud admin creates an operator and a venue owned by a customer', 
   await expect(page.getByText('East Bank Operator')).toBeVisible();
 
   await page.getByTestId('accounts-tab-venues').click();
-  await expect(page.getByText('Bandit Arena Lab')).toBeVisible();
+  // The venue banner heading also reads "Bandit Arena Lab"; the table cell is the list entry.
+  await expect(page.getByRole('cell', { name: 'Bandit Arena Lab' })).toBeVisible();
   await page.getByTestId('accounts-name').fill('Cockrill Bend');
   const owner = page.getByRole('combobox', { name: 'Venue owner (Customer)' });
   await expect(owner).toHaveText('Bandit Lab Facilities');

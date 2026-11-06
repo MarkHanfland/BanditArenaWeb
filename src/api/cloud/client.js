@@ -12,7 +12,7 @@ const cloudApi = axios.create({
 
   baseURL: getCloudApiBaseUrl(),
 
-  timeout: 10000,
+  timeout: 20000,
 
 })
 
@@ -618,6 +618,34 @@ export async function listReservations() {
 
 
 
+export async function getVenueAvailability(venueId, date) {
+
+  return request(() => cloudApi.get(`/venues/${encodeURIComponent(venueId)}/availability`, { params: { date } }))
+
+}
+
+
+
+export async function listPlayGroups() {
+
+  return request(() => cloudApi.get('/play-groups'))
+
+}
+
+
+
+export async function createGroupInvitation(groupId, payload) {
+  return request(() => cloudApi.post(`/play-groups/${encodeURIComponent(groupId)}/invitations`, payload))
+}
+
+export async function bookPlayGroup(groupId, payload) {
+
+  return request(() => cloudApi.post(`/play-groups/${encodeURIComponent(groupId)}/book`, payload))
+
+}
+
+
+
 export async function bookReservation(payload) {
 
   return request(() => cloudApi.post('/reservations', payload))
@@ -877,6 +905,30 @@ export async function unassignVenueRole(venueId, assignmentId) {
 export async function listLicensePlans() {
 
   return request(() => cloudApi.get('/license-plans'))
+
+}
+
+
+
+export async function upsertLicensePlan(planId, payload) {
+
+  return request(() => cloudApi.put(`/license-plans/${planId}`, payload))
+
+}
+
+
+
+export async function getReleaseHealth(query = {}) {
+
+  const params = new URLSearchParams()
+
+  if (query.channel) params.set('channel', query.channel)
+
+  if (query.release) params.set('release', query.release)
+
+  const suffix = params.toString() ? `?${params}` : ''
+
+  return request(() => cloudApi.get(`/fleet/release-health${suffix}`))
 
 }
 
