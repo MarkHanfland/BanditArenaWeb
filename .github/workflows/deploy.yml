@@ -20,7 +20,25 @@ env:
   STACK_NAME: bandit-arena-website-prod
 
 jobs:
+  # A push to main does not reach the bucket if the console fails the accessibility gate (SW-163).
+  accessibility-gate:
+    runs-on: ubuntu-24.04 # Playwright does not support the newer ubuntu-latest image yet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Console accessibility gate
+        env:
+          BANDIT_TEST_CREDENTIALS_PATH: ${{ github.workspace }}/tests/fixtures/e2e-bypass-credentials.json
+          VITE_E2E_AUTH_BYPASS: 'true'
+        run: npx playwright test tests/e2e/accessibility.spec.ts
+
   build-and-deploy:
+    needs: accessibility-gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

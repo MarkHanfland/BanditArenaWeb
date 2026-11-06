@@ -11,6 +11,25 @@ on:
       - '.github/workflows/playwright-pr.yml'
 
 jobs:
+  # SW-163: a WCAG 2.2 A or AA violation on the sign-in page, any implemented page or any role's
+  # landing page fails this job on its own, so the cause is clear from the check name.
+  accessibility:
+    runs-on: ubuntu-24.04 # Playwright does not support the newer ubuntu-latest image yet
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Console accessibility gate
+        env:
+          BANDIT_TEST_CREDENTIALS_PATH: ${{ github.workspace }}/tests/fixtures/e2e-bypass-credentials.json
+          VITE_E2E_AUTH_BYPASS: 'true'
+        run: npx playwright test tests/e2e/accessibility.spec.ts
+
   playwright:
     runs-on: ubuntu-24.04 # Playwright does not support the newer ubuntu-latest image yet
 
