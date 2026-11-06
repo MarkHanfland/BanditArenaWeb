@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { signInAs } from '../helpers/auth';
 import { mockConsoleApis } from '../helpers/mockApis';
-import { expandMenuGroup } from '../helpers/menuNav';
+import { expandAllMenuGroups, expandMenuGroup } from '../helpers/menuNav';
 
 // Role-journey acceptance (PM review, FR-SW-UI-014 / FR-SW-UI-017 / FR-SW-UI-018).
 // Each role lands on the screen its job needs, and sees only the chrome it can use.
@@ -96,4 +96,30 @@ test.describe('customer billing roles land on their own invoices', () => {
     await expect(page.getByRole('heading', { name: 'Commerce' })).toBeVisible();
     await expect(page.getByTestId('commerce-tab-invoices')).toHaveCount(0);
   });
+});
+
+// FR-SW-UI-018 role journeys: given this role, when it signs in, it lands on this page, sees these
+// controls, and does not see those.
+const JOURNEYS = [
+  { role: 'frontDesk', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-users'], hidden: ['menu-venue-hours', 'menu-staff', 'menu-billing', 'menu-fleet', 'menu-dashboard'] },
+  { role: 'accountOwner', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-venue-hours', 'menu-staff', 'menu-billing'], hidden: ['menu-fleet', 'menu-dashboard', 'menu-treadmill'] },
+  { role: 'billingAdmin', lands: 'menu-billing', heading: 'Payments & Billing', sees: ['menu-billing'], hidden: ['menu-reservations', 'menu-fleet', 'menu-dashboard', 'menu-staff'] },
+  { role: 'fleetAdmin', lands: 'menu-fleet', heading: 'Fleet', sees: ['menu-fleet', 'menu-dashboard'], hidden: ['menu-reservations', 'menu-staff'] },
+  { role: 'venueAdmin', lands: 'menu-dashboard', heading: null, sees: ['menu-dashboard', 'menu-reservations', 'menu-venue-hours'], hidden: ['menu-billing', 'menu-fleet'] },
+  { role: 'operator', lands: 'menu-dashboard', heading: null, sees: ['menu-dashboard', 'menu-treadmill'], hidden: ['menu-reservations', 'menu-billing', 'menu-fleet'] },
+] as const;
+
+test.describe('FR-SW-UI-018 each role lands on its own page', () => {
+  for (const journey of JOURNEYS) {
+    test(`FR-SW-UI-018: ${journey.role} lands on ${journey.lands}`, async ({ page }) => {
+      await mockConsoleApis(page);
+      await signInAs(page, journey.role);
+      await expect(page.getByTestId('sign-out')).toBeVisible();
+      await expandAllMenuGroups(page);
+      await expect(page.getByTestId(journey.lands)).toHaveAttribute('aria-current', 'page');
+      if (journey.heading) await expect(page.getByRole('heading', { name: journey.heading, exact: true })).toBeVisible();
+      for (const id of journey.sees) await expect(page.getByTestId(id)).toBeVisible();
+      for (const id of journey.hidden) await expect(page.getByTestId(id)).toHaveCount(0);
+    });
+  }
 });

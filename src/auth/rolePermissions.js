@@ -112,6 +112,31 @@ export function deriveUserRole(user) {
   return isCloudDeployment() ? ROLE_NONE : ROLE_OPERATOR
 }
 
+/**
+ * FR-SW-UI-018 landing: the first page of the user's primary role. A role not listed lands on
+ * its first permitted page. Account Owner lands on Reservations until the onboarding checklist
+ * (FR-SW-UI-016) exists. Field Service Technician lands on Support once that page is built.
+ */
+const ROLE_LANDING = {
+  [ROLE_OPERATOR]: 'dashboard',
+  [ROLE_VENUE_ADMIN]: 'dashboard',
+  [ROLE_CLOUD_ADMIN]: 'dashboard',
+  [ROLE_FRONT_DESK]: 'reservations',
+  [ROLE_ACCOUNT_OWNER]: 'reservations',
+  [ROLE_BILLING_ADMIN]: 'billing',
+  [ROLE_FLEET_ADMIN]: 'fleet',
+  [ROLE_TECHNICIAN]: 'support',
+}
+
+export function landingMenuId(user) {
+  const allowed = getAllowedMenuIds(user)
+  const leaves = new Map(MENU_LEAF_CATALOG.map((leaf) => [leaf.id, leaf]))
+  const usable = (id) => allowed.includes(id) && leaves.get(id)?.implemented !== false
+  const wanted = ROLE_LANDING[deriveUserRole(user)]
+  if (wanted && usable(wanted)) return wanted
+  return MENU_LEAF_CATALOG.find((leaf) => usable(leaf.id))?.id || null
+}
+
 /** FR-SW-UI-014: the union of the menus every one of the user's roles permits. */
 export function getAllowedMenuIds(user) {
   const roles = userRoles(user)

@@ -676,6 +676,11 @@ export async function checkInReservation(slotId, payload = {}) {
 
 }
 
+/** The front desk scans a Player's session pass (or types its code). The cloud checks in the reservation it names. */
+export async function redeemSessionPass(payload) {
+  return request(() => cloudApi.post('/session-passes/redeem', { payload }))
+}
+
 
 
 export async function markReservationNoShow(slotId, payload = {}) {

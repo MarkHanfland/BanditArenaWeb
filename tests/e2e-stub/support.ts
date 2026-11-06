@@ -44,7 +44,9 @@ export async function playerCall(playerId: string, path: string) {
 export async function forwardCloud(page, venueId = DATA.chicago) {
   // The console remembers the venue a login last used. Start at the venue the dataset's treadmills are in.
   await page.addInitScript((id) => {
-    window.localStorage.setItem('bandit.venue.test-venue-admin', id);
+    for (const username of ['test-venue-admin', 'test-front-desk']) {
+      window.localStorage.setItem(`bandit.venue.${username}`, id);
+    }
   }, venueId);
   await page.route((url) => url.origin === CONSOLE && url.pathname.startsWith('/api/'), async (route) => {
     const request = route.request();

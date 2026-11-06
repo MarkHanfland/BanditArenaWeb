@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { canOperateDevice, cloudCapabilities, deriveUserRole, getAllowedMenuIds } from './rolePermissions.js'
+import { canOperateDevice, cloudCapabilities, deriveUserRole, getAllowedMenuIds, landingMenuId } from './rolePermissions.js'
 
 const as = (...groups) => ({ groups })
 const menus = (...groups) => new Set(getAllowedMenuIds(as(...groups)))
@@ -67,4 +67,29 @@ test('capabilities follow the ownership chains', () => {
   assert.ok(billing.billingAdmin && !billing.venueAdmin && !billing.frontDesk)
   const desk = cloudCapabilities(as('bandit-front-desk'))
   assert.ok(desk.frontDesk && !desk.venueAdmin)
+})
+
+// FR-SW-UI-018: each role lands on the first page of its job.
+test('each role lands on the page its job needs', () => {
+  const landing = {
+    'bandit-operator': 'dashboard',
+    'bandit-venue-admin': 'dashboard',
+    'bandit-cloud-admin': 'dashboard',
+    'bandit-front-desk': 'reservations',
+    'bandit-account-owner': 'reservations',
+    'bandit-billing-admin': 'billing',
+    'bandit-fleet-admin': 'fleet',
+  }
+  for (const [group, page] of Object.entries(landing)) {
+    assert.equal(landingMenuId(as(group)), page, group + ' lands on ' + page)
+  }
+})
+
+test('a Technician lands on the first page that exists while Support is not built', () => {
+  assert.equal(landingMenuId(as('bandit-technician')), 'dashboard')
+})
+
+test('the primary role decides the landing for a user with several roles', () => {
+  assert.equal(landingMenuId(as('bandit-front-desk', 'bandit-technician')), 'reservations')
+  assert.equal(landingMenuId(as('bandit-fleet-admin', 'bandit-front-desk')), 'fleet')
 })

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AppBar,
   Box,
@@ -74,7 +74,7 @@ import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
 
 import { useAuth } from './auth/useAuth'
-import { canOperateDevice, extractGroupsFromUser, filterMenuGroups } from './auth/rolePermissions'
+import { canOperateDevice, extractGroupsFromUser, filterMenuGroups, landingMenuId } from './auth/rolePermissions'
 import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
 import DeviceStatusBand from './components/shared/DeviceStatusBand'
@@ -285,6 +285,15 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     window.addEventListener('bandit:open-session-history', onOpenHistory)
     return () => window.removeEventListener('bandit:open-session-history', onOpenHistory)
   }, [selectMenuItem])
+
+  // FR-SW-UI-018: sign-in lands on the first page of the user's primary role, once.
+  const landed = useRef(false)
+  useEffect(() => {
+    if (landed.current || !user) return
+    landed.current = true
+    const id = landingMenuId(user)
+    if (id && id !== 'dashboard') selectMenuItem(id)
+  }, [user, selectMenuItem])
 
   // Sync default expand when local reachability flips (FR-SW-UI-009).
   useEffect(() => {

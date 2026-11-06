@@ -87,6 +87,7 @@ export {
   createReservationSlot,
   cancelReservation,
   checkInReservation,
+  redeemSessionPass,
   markReservationNoShow,
   sendNotification,
   listNotifications,

@@ -22,9 +22,12 @@ import {
   checkInReservation,
   getVenueAvailability,
   listPlayGroups,
+  listSessions,
   listUsers,
+  redeemSessionPass,
 } from '../../api/cloud'
 import { useVenue } from '../../session/VenueContext'
+import { nextOpenSlot, playerStatus } from './frontDesk'
 
 function overlaps(start, end, slotStart, slotEnd) {
   return Date.parse(start) < Date.parse(slotEnd) && Date.parse(end) > Date.parse(slotStart)
@@ -108,6 +111,11 @@ export default function ReservationsPage() {
   const [mediaChoices, setMediaChoices] = useState([])
   const [mediaId, setMediaId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sessions, setSessions] = useState([])
+  const [passText, setPassText] = useState('')
+  const [scan, setScan] = useState(null)
+  const [walkInOpen, setWalkInOpen] = useState(false)
+  const [walkInPlayer, setWalkInPlayer] = useState('')
 
   const load = useCallback(async () => {
     if (!venueCtx?.ready) return
@@ -119,12 +127,14 @@ export default function ReservationsPage() {
     setLoading(true)
     setGrid(null)
     setError('')
-    const [availability, people, playGroups, titles] = await Promise.all([
+    const [availability, people, playGroups, titles, played] = await Promise.all([
       getVenueAvailability(venueId, date),
       listUsers(),
       listPlayGroups(),
       listMedia(),
+      listSessions({ venueId, limit: 200 }),
     ])
+    setSessions(played.data?.sessions || [])
     if (availability.error) {
       setError(availability.error)
       setGrid(null)
@@ -150,8 +160,14 @@ export default function ReservationsPage() {
   const reservations = grid?.reservations || []
   const timezone = grid?.timezone
 
+  // A no-show frees the machine, so it never holds a cell; it is shown on the open cell instead.
   const reservationAt = (machineId, column) => reservations.find((item) => (
-    item.resourceId === machineId && overlaps(item.startTime, item.endTime, column.startTime, column.endTime)
+    item.status !== 'no_show'
+    && item.resourceId === machineId && overlaps(item.startTime, item.endTime, column.startTime, column.endTime)
+  ))
+  const noShowAt = (machineId, column) => reservations.find((item) => (
+    item.status === 'no_show'
+    && item.resourceId === machineId && overlaps(item.startTime, item.endTime, column.startTime, column.endTime)
   ))
 
   const userName = (userId) => users.find((user) => user.userId === userId)?.name || userId || 'Player'
@@ -256,6 +272,66 @@ export default function ReservationsPage() {
     await load()
   }
 
+  const checkInByPass = async () => {
+    const payload = passText.trim()
+    if (!payload) return
+    setBusy(true)
+    setScan(null)
+    const result = await redeemSessionPass(payload)
+    setBusy(false)
+    if (result.error) {
+      setScan({ error: result.error })
+      return
+    }
+    const body = result.data || {}
+    setScan({
+      name: body.player?.displayName || body.player?.userId || 'Player',
+      status: body.reservation?.status || '',
+      eligible: body.eligible !== false,
+      reason: body.failureMessage || '',
+    })
+    setPassText('')
+    await load()
+  }
+
+  const addWalkIn = async () => {
+    if (!walkInPlayer) return
+    const slot = nextOpenSlot(columns, machines, reservations)
+    if (!slot) {
+      setWalkInOpen(false)
+      setMessage('No open time is left today.')
+      return
+    }
+    setBusy(true)
+    setMessage('')
+    const result = await bookReservation({
+      userId: walkInPlayer,
+      resourceId: slot.machineId,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      venueId,
+    })
+    setBusy(false)
+    setWalkInOpen(false)
+    if (result.error) {
+      setMessage(result.error)
+      return
+    }
+    const when = clockFace(slot.startTime, timezone)
+    setMessage(`Walk-in booked on ${slot.machineName} at ${when.label} ${when.period}`)
+    await load()
+  }
+
+  const openWalkIn = () => {
+    if (date !== todayKey()) {
+      setDate(todayKey())
+      setMessage("Walk-ins go on today's grid. Choose the Player again.")
+      return
+    }
+    setWalkInPlayer((current) => current || users[0]?.userId || '')
+    setWalkInOpen(true)
+  }
+
   const canStart = (item) => {
     if (!item || item.status !== 'booked') return false
     const start = Date.parse(item.startTime)
@@ -290,7 +366,34 @@ export default function ReservationsPage() {
             Book {selection.indexes.length * 30} min
           </Button>
         )}
+        <Button variant="outlined" data-testid="walk-in-open" disabled={!venueId || busy} onClick={openWalkIn}>
+          Add walk-in
+        </Button>
       </Stack>
+      <Stack direction="row" spacing={1} sx={{ mb: 2 }} alignItems="flex-start" data-testid="check-in-panel">
+        <TextField
+          size="small"
+          label="Pass code"
+          value={passText}
+          onChange={(event) => setPassText(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Enter') checkInByPass() }}
+          helperText="Scan the Player's pass, or type its code"
+          sx={{ minWidth: 320 }}
+          inputProps={{ 'data-testid': 'check-in-code', autoComplete: 'off' }}
+        />
+        <Button variant="contained" data-testid="check-in-submit" disabled={busy || !passText.trim()} onClick={checkInByPass} sx={{ mt: 0.5 }}>
+          Check in
+        </Button>
+      </Stack>
+      {scan?.error && <Alert severity="error" sx={{ mb: 2 }} data-testid="check-in-result">{scan.error}</Alert>}
+      {scan && !scan.error && (
+        <Alert severity={scan.eligible ? 'success' : 'warning'} sx={{ mb: 2 }} data-testid="check-in-result">
+          {scan.name} is checked in.
+          {scan.eligible
+            ? ' Eligible to play. The Operator confirms before the session starts.'
+            : ` Not ready to play: ${scan.reason || 'see the Player record'}`}
+        </Alert>
+      )}
       {(!venueCtx?.ready || loading) && !error && (
         <Typography>Loading the day…</Typography>
       )}
@@ -355,7 +458,23 @@ export default function ReservationsPage() {
                             '&:hover': { bgcolor: background },
                           }}
                         >
-                          {booked ? userName(booked.userId) : past ? 'Not Available' : 'Open'}
+                          {booked ? (
+                            <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                              <span>{userName(booked.userId)}</span>
+                              <Box component="span" data-testid={`slot-status-${machine.instanceId}-${index}`} sx={{ fontSize: 11, opacity: 0.9 }}>
+                                {playerStatus(booked, sessions)}
+                              </Box>
+                            </Box>
+                          ) : (
+                            <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                              <span>{past ? 'Not Available' : 'Open'}</span>
+                              {noShowAt(machine.instanceId, column) && (
+                                <Box component="span" data-testid={`slot-status-${machine.instanceId}-${index}`} sx={{ fontSize: 11, opacity: 0.9 }}>
+                                  {`No-show: ${userName(noShowAt(machine.instanceId, column).userId)}`}
+                                </Box>
+                              )}
+                            </Box>
+                          )}
                         </Button>
                       </td>
                     )
@@ -440,6 +559,32 @@ export default function ReservationsPage() {
           <Button onClick={() => setBookOpen(false)}>Close</Button>
           <Button variant="contained" data-testid="reservation-book-confirm" disabled={busy || (!groupId && !playerId)} onClick={book}>
             Book
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={walkInOpen} onClose={() => setWalkInOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Add a walk-in</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Typography variant="body2">The Player is booked for the next open half hour on any machine.</Typography>
+            <TextField
+              select
+              label="Player"
+              value={walkInPlayer}
+              onChange={(event) => setWalkInPlayer(event.target.value)}
+              inputProps={{ 'data-testid': 'walk-in-player' }}
+            >
+              {users.map((user) => (
+                <MenuItem key={user.userId} value={user.userId}>{user.name || user.userId}</MenuItem>
+              ))}
+            </TextField>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWalkInOpen(false)}>Close</Button>
+          <Button variant="contained" data-testid="walk-in-confirm" disabled={busy || !walkInPlayer} onClick={addWalkIn}>
+            Book walk-in
           </Button>
         </DialogActions>
       </Dialog>
