@@ -12,7 +12,7 @@ on:
 
 jobs:
   playwright:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright does not support the newer ubuntu-latest image yet
 
     steps:
       - name: Checkout BanditArenaWeb
