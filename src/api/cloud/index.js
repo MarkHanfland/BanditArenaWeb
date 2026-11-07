@@ -116,4 +116,7 @@ export {
   reconcileBillingCycle,
   estimateBillingTax,
   listCatalogModels,
+  listIncidents,
+  createIncident,
+  releaseIncidentHold,
 } from './client'

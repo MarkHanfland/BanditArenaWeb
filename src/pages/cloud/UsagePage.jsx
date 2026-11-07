@@ -138,7 +138,7 @@ function FleetCard({ fleet, onOpenFleet }) {
 export default function UsagePage() {
   const { user } = useAuth()
   // FR-SW-AUTH-010: analytics and alerts are Fleet Administrator (Domain 11);
-  // notifications are Cloud Administrator (Domain 14).
+  // Account Owner reads notification history; sending stays Cloud Administrator.
   const caps = cloudCapabilities(user)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -155,7 +155,7 @@ export default function UsagePage() {
   const refreshAlertsAndHistory = async () => {
     const [alertRes, notifRes] = await Promise.all([
       caps.fleetAdmin ? listAlerts({ status: 'open' }) : { data: null },
-      caps.cloudAdmin ? listNotifications({}) : { data: null },
+      caps.accountOwner ? listNotifications({}) : { data: null },
     ])
     if (!alertRes.error) setAlerts(alertRes.data?.alerts || [])
     if (!notifRes.error) setNotifications(notifRes.data?.notifications || [])
@@ -416,7 +416,7 @@ export default function UsagePage() {
           </Stack>
           </>)}
 
-          {caps.cloudAdmin && (
+          {caps.accountOwner && (
           <Box
             data-testid="analytics-notifications"
             sx={{
@@ -430,6 +430,7 @@ export default function UsagePage() {
               <Typography variant="subtitle2" sx={{ color: '#fff' }}>
                 Notification history
               </Typography>
+              {caps.cloudAdmin ? (
               <Stack direction="row" spacing={1}>
                 <Button
                   size="small"
@@ -450,6 +451,7 @@ export default function UsagePage() {
                   {sendingNotif ? 'Sending…' : 'Send push'}
                 </Button>
               </Stack>
+              ) : null}
             </Stack>
             {notifications.length === 0 ? (
               <Typography variant="body2" color="text.secondary" data-testid="analytics-notifications-empty">

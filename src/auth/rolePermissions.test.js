@@ -6,18 +6,20 @@ const as = (...groups) => ({ groups })
 const menus = (...groups) => new Set(getAllowedMenuIds(as(...groups)))
 
 // FR-SW-UI-014: each role in the FR-SW-AUTH-001 table sees only its permitted menus.
-test('Front Desk sees reservations and Player lookup only', () => {
-  assert.deepEqual([...menus('bandit-front-desk')].sort(), ['reservations', 'users'])
+test('Front Desk sees reservations, Player lookup, and incidents only', () => {
+  assert.deepEqual([...menus('bandit-front-desk')].sort(), ['incidents', 'reservations', 'users'])
   assert.ok(!menus('bandit-front-desk').has('venue-hours'))
+  assert.ok(!menus('bandit-front-desk').has('audit'))
+  assert.ok(!menus('bandit-front-desk').has('notifications'))
 })
 
 test('Billing Admin sees billing only', () => {
   assert.deepEqual([...menus('bandit-billing-admin')], ['billing'])
 })
 
-test('Account Owner sees venue pages and billing, but no fleet pages', () => {
+test('Account Owner sees venue pages, billing, incidents and audit, but no fleet pages', () => {
   const m = menus('bandit-account-owner')
-  for (const id of ['reservations', 'users', 'staff', 'sessions', 'media', 'billing', 'usage']) {
+  for (const id of ['reservations', 'users', 'staff', 'sessions', 'media', 'billing', 'usage', 'incidents', 'audit']) {
     assert.ok(m.has(id), `account owner sees ${id}`)
   }
   for (const id of ['fleet', 'diagnostics', 'support', 'accounts']) {
@@ -36,6 +38,13 @@ test('Technician and Fleet Administrator see fleet pages, no business pages', ()
   assert.ok(tech.has('support') && tech.has('diagnostics') && !tech.has('reservations'))
   const fleet = menus('bandit-fleet-admin')
   assert.ok(fleet.has('fleet') && !fleet.has('reservations') && !fleet.has('staff'))
+  assert.ok(!fleet.has('audit'), 'Fleet Administrator cannot call the audit trail')
+})
+
+test('Organization Admin, Instructor and Support Agent see only their own chrome', () => {
+  assert.deepEqual([...menus('bandit-org-admin')], ['organizations'])
+  assert.deepEqual([...menus('bandit-instructor')], ['cohorts'])
+  assert.deepEqual([...menus('bandit-support')], [])
 })
 
 test('Operator sees only the local device pages', () => {
@@ -53,7 +62,7 @@ test('device chrome is limited to roles that have a Local Device menu', () => {
   for (const group of ['bandit-operator', 'bandit-venue-admin', 'bandit-technician', 'bandit-fleet-admin', 'bandit-cloud-admin']) {
     assert.ok(canOperateDevice(as(group)), `${group} sees device chrome`)
   }
-  for (const group of ['bandit-front-desk', 'bandit-account-owner', 'bandit-billing-admin', 'bandit-developer']) {
+  for (const group of ['bandit-front-desk', 'bandit-account-owner', 'bandit-billing-admin', 'bandit-developer', 'bandit-org-admin', 'bandit-instructor', 'bandit-support']) {
     assert.ok(!canOperateDevice(as(group)), `${group} does not see device chrome`)
   }
   assert.ok(canOperateDevice(as('bandit-front-desk', 'bandit-operator')), 'a union of roles keeps device chrome')

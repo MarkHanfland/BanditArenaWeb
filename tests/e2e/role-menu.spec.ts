@@ -4,7 +4,7 @@ import { expandAllMenuGroups } from '../helpers/menuNav';
 import { mockConsoleApis } from '../helpers/mockApis';
 
 type RoleCase = {
-  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin' | 'accountOwner' | 'billingAdmin' | 'frontDesk';
+  roleId: 'operator' | 'technician' | 'venueAdmin' | 'fleetAdmin' | 'cloudAdmin' | 'accountOwner' | 'billingAdmin' | 'frontDesk' | 'orgAdmin' | 'instructor' | 'support';
   expected: string[];
   expectedDisabled: string[];
   notExpected: string[];
@@ -64,10 +64,11 @@ const roleCases: RoleCase[] = [
       'menu-reservations',
       'menu-staff',
       'menu-sessions',
+      'menu-incidents',
       'menu-group-operations',
       'menu-group-content',
     ],
-    expectedDisabled: ['menu-notifications', 'menu-media-uploads', 'menu-session-recordings'],
+    expectedDisabled: ['menu-notifications', 'menu-media-uploads', 'menu-session-recordings', 'menu-cohorts'],
     notExpected: [
       'menu-fleet',
       'menu-usage',
@@ -93,10 +94,10 @@ const roleCases: RoleCase[] = [
       'menu-group-analytics',
       'menu-group-administration',
     ],
-    expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles', 'menu-audit'],
+    expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles'],
     // Fleet Administrator owns Venue hours (rolePermissions FLEET_ADMIN_CLOUD), so the
     // Operations group is present with that single page; every other operations page is not.
-    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-reservations'],
+    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-reservations', 'menu-audit'],
   },
   {
     roleId: 'cloudAdmin',
@@ -104,6 +105,7 @@ const roleCases: RoleCase[] = [
       'menu-dashboard',
       'menu-users',
       'menu-sessions',
+      'menu-incidents',
       'menu-media',
       'menu-billing',
       'menu-accounts',
@@ -121,10 +123,10 @@ const roleCases: RoleCase[] = [
   {
     roleId: 'accountOwner',
     expected: [
-      'menu-users', 'menu-reservations', 'menu-staff', 'menu-sessions', 'menu-media',
+      'menu-users', 'menu-reservations', 'menu-staff', 'menu-sessions', 'menu-incidents', 'menu-media',
       'menu-billing', 'menu-usage', 'menu-group-operations', 'menu-group-business',
     ],
-    expectedDisabled: [],
+    expectedDisabled: ['menu-audit', 'menu-cohorts', 'menu-notifications'],
     notExpected: ['menu-dashboard', 'menu-fleet', 'menu-accounts', 'menu-service-logs', 'menu-group-device-fleet'],
   },
   {
@@ -135,9 +137,27 @@ const roleCases: RoleCase[] = [
   },
   {
     roleId: 'frontDesk',
-    expected: ['menu-reservations', 'menu-users', 'menu-group-operations'],
+    expected: ['menu-reservations', 'menu-users', 'menu-incidents', 'menu-group-operations'],
     expectedDisabled: [],
     notExpected: ['menu-dashboard', 'menu-staff', 'menu-sessions', 'menu-billing', 'menu-media', 'menu-fleet', 'menu-group-business', 'menu-group-device-fleet'],
+  },
+  {
+    roleId: 'orgAdmin',
+    expected: ['menu-organizations', 'menu-group-business'],
+    expectedDisabled: ['menu-organizations'],
+    notExpected: ['menu-dashboard', 'menu-users', 'menu-reservations', 'menu-billing', 'menu-fleet', 'menu-group-operations'],
+  },
+  {
+    roleId: 'instructor',
+    expected: ['menu-cohorts', 'menu-group-operations'],
+    expectedDisabled: ['menu-cohorts'],
+    notExpected: ['menu-dashboard', 'menu-users', 'menu-reservations', 'menu-staff', 'menu-billing', 'menu-fleet'],
+  },
+  {
+    roleId: 'support',
+    expected: [],
+    expectedDisabled: [],
+    notExpected: ['menu-dashboard', 'menu-users', 'menu-reservations', 'menu-fleet', 'menu-billing', 'menu-group-operations'],
   },
 ];
 

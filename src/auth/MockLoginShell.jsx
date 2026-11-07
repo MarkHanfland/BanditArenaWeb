@@ -20,6 +20,9 @@ import {
   ROLE_ACCOUNT_OWNER,
   ROLE_BILLING_ADMIN,
   ROLE_FRONT_DESK,
+  ROLE_ORG_ADMIN,
+  ROLE_INSTRUCTOR,
+  ROLE_SUPPORT,
 } from './rolePermissions'
 
 const ROLE_ALIAS = {
@@ -29,6 +32,13 @@ const ROLE_ALIAS = {
   'front-desk': ROLE_FRONT_DESK,
   frontDesk: ROLE_FRONT_DESK,
   'bandit-front-desk': ROLE_FRONT_DESK,
+  'org-admin': ROLE_ORG_ADMIN,
+  orgAdmin: ROLE_ORG_ADMIN,
+  'bandit-org-admin': ROLE_ORG_ADMIN,
+  instructor: ROLE_INSTRUCTOR,
+  'bandit-instructor': ROLE_INSTRUCTOR,
+  support: ROLE_SUPPORT,
+  'bandit-support': ROLE_SUPPORT,
   'account-owner': ROLE_ACCOUNT_OWNER,
   accountOwner: ROLE_ACCOUNT_OWNER,
   'bandit-account-owner': ROLE_ACCOUNT_OWNER,
@@ -56,6 +66,9 @@ const GROUP_BY_ROLE = {
   [ROLE_ACCOUNT_OWNER]: 'bandit-account-owner',
   [ROLE_BILLING_ADMIN]: 'bandit-billing-admin',
   [ROLE_FRONT_DESK]: 'bandit-front-desk',
+  [ROLE_ORG_ADMIN]: 'bandit-org-admin',
+  [ROLE_INSTRUCTOR]: 'bandit-instructor',
+  [ROLE_SUPPORT]: 'bandit-support',
 }
 
 export default function MockLoginShell() {
@@ -155,6 +168,9 @@ export default function MockLoginShell() {
             <MenuItem value={ROLE_ACCOUNT_OWNER}>Account Owner</MenuItem>
             <MenuItem value={ROLE_BILLING_ADMIN}>Billing Admin</MenuItem>
             <MenuItem value={ROLE_FRONT_DESK}>Front Desk</MenuItem>
+            <MenuItem value={ROLE_ORG_ADMIN}>Organization Admin</MenuItem>
+            <MenuItem value={ROLE_INSTRUCTOR}>Instructor</MenuItem>
+            <MenuItem value={ROLE_SUPPORT}>Support Agent</MenuItem>
           </TextField>
           <Button
             variant="contained"

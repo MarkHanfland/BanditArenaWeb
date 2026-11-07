@@ -10,6 +10,9 @@ export const ROLE_DEVELOPER = 'developer'
 export const ROLE_FRONT_DESK = 'front-desk'
 export const ROLE_ACCOUNT_OWNER = 'account-owner'
 export const ROLE_BILLING_ADMIN = 'billing-admin'
+export const ROLE_ORG_ADMIN = 'org-admin'
+export const ROLE_INSTRUCTOR = 'instructor'
+export const ROLE_SUPPORT = 'support'
 /** Cloud user with no staff group: no cloud menus (fail closed). */
 export const ROLE_NONE = 'none'
 
@@ -33,7 +36,8 @@ const CLOUD_ADMIN_CLOUD = [
 ]
 /** Commerce shows Fleet Administrator only its Licensing tab (Domain 06). */
 const FLEET_ADMIN_CLOUD = [
-  ...leafIdsInGroups(MENU_GROUP.DEVICE_FLEET, MENU_GROUP.ANALYTICS, MENU_GROUP.ADMINISTRATION),
+  ...leafIdsInGroups(MENU_GROUP.DEVICE_FLEET, MENU_GROUP.ANALYTICS),
+  ...leafIdsInGroups(MENU_GROUP.ADMINISTRATION).filter((id) => id !== 'audit'),
   'billing',
   'venue-hours',
 ]
@@ -46,9 +50,12 @@ const DEVELOPER_CLOUD = ['reservations', 'users', 'staff', 'sessions', 'usage']
  * billing and staff delegation, no fleet or catalog writes. Billing Admin: billing only.
  * Front Desk: reservations, check-in, and Player lookup and enrollment.
  */
-const ACCOUNT_OWNER_CLOUD = [...VENUE_CLOUD, 'billing', 'usage']
+const ACCOUNT_OWNER_CLOUD = [...VENUE_CLOUD, 'billing', 'usage', 'audit']
 const BILLING_ADMIN_CLOUD = ['billing']
-const FRONT_DESK_CLOUD = ['reservations', 'users']
+const FRONT_DESK_CLOUD = ['reservations', 'users', 'incidents']
+const ORG_ADMIN_CLOUD = ['organizations']
+const INSTRUCTOR_CLOUD = ['cohorts']
+const SUPPORT_CLOUD = []
 
 export const ROLE_PERMISSIONS = {
   [ROLE_OPERATOR]: ['dashboard', 'treadmill', 'events'],
@@ -60,6 +67,9 @@ export const ROLE_PERMISSIONS = {
   [ROLE_ACCOUNT_OWNER]: ACCOUNT_OWNER_CLOUD,
   [ROLE_BILLING_ADMIN]: BILLING_ADMIN_CLOUD,
   [ROLE_FRONT_DESK]: FRONT_DESK_CLOUD,
+  [ROLE_ORG_ADMIN]: ORG_ADMIN_CLOUD,
+  [ROLE_INSTRUCTOR]: INSTRUCTOR_CLOUD,
+  [ROLE_SUPPORT]: SUPPORT_CLOUD,
   [ROLE_NONE]: [],
 }
 
@@ -73,6 +83,9 @@ const GROUP_ROLE = {
   'bandit-technician': ROLE_TECHNICIAN,
   'bandit-developer': ROLE_DEVELOPER,
   'bandit-operator': ROLE_OPERATOR,
+  'bandit-org-admin': ROLE_ORG_ADMIN,
+  'bandit-instructor': ROLE_INSTRUCTOR,
+  'bandit-support': ROLE_SUPPORT,
 }
 
 export function extractGroupsFromUser(user) {
@@ -95,7 +108,8 @@ export function extractGroupsFromUser(user) {
 /** Highest role, for labels; menus come from every group the user holds (getAllowedMenuIds). */
 const ROLE_ORDER = [
   ROLE_CLOUD_ADMIN, ROLE_FLEET_ADMIN, ROLE_ACCOUNT_OWNER, ROLE_VENUE_ADMIN, ROLE_BILLING_ADMIN,
-  ROLE_FRONT_DESK, ROLE_TECHNICIAN, ROLE_DEVELOPER, ROLE_OPERATOR,
+  ROLE_FRONT_DESK, ROLE_INSTRUCTOR, ROLE_TECHNICIAN, ROLE_DEVELOPER, ROLE_ORG_ADMIN,
+  ROLE_SUPPORT, ROLE_OPERATOR,
 ]
 
 /** Roles the user holds, from their Cognito groups. */

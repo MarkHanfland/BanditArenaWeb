@@ -1106,3 +1106,21 @@ export async function queueDiagnosticCommand(payload) {
 }
 
 
+
+export async function listIncidents(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.venueId) qs.set('venueId', params.venueId)
+  if (params.injured) qs.set('injured', params.injured)
+  const suffix = qs.toString() ? `?${qs.toString()}` : ''
+  return request(() => cloudApi.get(`/incidents${suffix}`))
+}
+
+export async function createIncident(payload) {
+  return request(() => cloudApi.post('/incidents', payload))
+}
+
+export async function releaseIncidentHold(incidentId, payload) {
+  return request(() => cloudApi.post(`/incidents/${incidentId}/hold/release`, payload))
+}
+
+

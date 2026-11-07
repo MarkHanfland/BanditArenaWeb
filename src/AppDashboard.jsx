@@ -54,6 +54,9 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import ApiIcon from '@mui/icons-material/Api'
 import PaletteIcon from '@mui/icons-material/Palette'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
+import AssignmentLateIcon from '@mui/icons-material/AssignmentLate'
+import SchoolIcon from '@mui/icons-material/School'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
 
 import DashboardTab from './pages/device/DashboardTab'
@@ -72,6 +75,7 @@ import ReservationsPage from './pages/cloud/ReservationsPage'
 import VenueHoursPage from './pages/cloud/VenueHoursPage'
 import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
+import IncidentsPage from './pages/cloud/IncidentsPage'
 
 import { useAuth } from './auth/useAuth'
 import { canOperateDevice, extractGroupsFromUser, filterMenuGroups, landingMenuId } from './auth/rolePermissions'
@@ -123,6 +127,7 @@ const IMPLEMENTED_PANELS = {
   usage: () => <UsagePage />,
   fleet: () => <FleetPage />,
   sessions: () => <SessionHistoryPage />,
+  incidents: () => <IncidentsPage />,
   'service-logs': () => <ServiceLogsPage />,
 }
 
@@ -137,6 +142,8 @@ const MENU_ICONS = {
   users: <GroupIcon />,
   staff: <ManageAccountsIcon />,
   sessions: <TimelineIcon />,
+  incidents: <AssignmentLateIcon />,
+  cohorts: <SchoolIcon />,
   notifications: <NotificationsIcon />,
   fleet: <HubIcon />,
   firmware: <SystemUpdateAltIcon />,
@@ -148,6 +155,7 @@ const MENU_ICONS = {
   'session-recordings': <VideoLibraryIcon />,
   billing: <PaymentsIcon />,
   accounts: <BusinessIcon />,
+  organizations: <AccountTreeIcon />,
   subscriptions: <CardMembershipIcon />,
   pricing: <LocalOfferIcon />,
   usage: <InsightsIcon />,
@@ -311,9 +319,9 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
   }, [deviceOnline, expandGroup])
 
   useEffect(() => {
-    if (!allItems.some((item) => item.id === activeTab)) {
-      setActiveTab(allItems[0]?.id || 'dashboard')
-    }
+    if (allItems.some((item) => item.id === activeTab)) return
+    const firstLive = allItems.find((item) => item.implemented !== false)
+    setActiveTab(firstLive?.id || allItems[0]?.id || 'dashboard')
   }, [allItems, activeTab, setActiveTab])
 
   // Keep the active item's pillar open (e.g. after Start Session → Dashboard).
@@ -705,7 +713,15 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
               {isDeviceTab && deviceOnline === false ? (
                 <DeviceOfflinePanel />
               ) : (
-                <VenueScopedPanel scopeKey={scopeKey}>{activeItem?.panel({ treadmillState })}</VenueScopedPanel>
+                <VenueScopedPanel scopeKey={scopeKey}>
+                  {typeof activeItem?.panel === 'function'
+                    ? activeItem.panel({ treadmillState })
+                    : (
+                      <Typography color="text.secondary" data-testid="page-coming-soon">
+                        This page is not built yet.
+                      </Typography>
+                    )}
+                </VenueScopedPanel>
               )}
             </ConsoleErrorBoundary>
           </TabPanel>

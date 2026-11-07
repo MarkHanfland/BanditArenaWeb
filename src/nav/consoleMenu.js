@@ -31,6 +31,8 @@ export const MENU_LEAF_CATALOG = [
   { id: 'users', groupId: MENU_GROUP.OPERATIONS, label: 'Enrollment / Check-In', implemented: true },
   { id: 'staff', groupId: MENU_GROUP.OPERATIONS, label: 'Staff Management', implemented: true },
   { id: 'sessions', groupId: MENU_GROUP.OPERATIONS, label: 'Session History', implemented: true },
+  { id: 'incidents', groupId: MENU_GROUP.OPERATIONS, label: 'Safety incidents', implemented: true },
+  { id: 'cohorts', groupId: MENU_GROUP.OPERATIONS, label: 'Instructor cohorts', implemented: false, phase: 'Beta 2' },
   { id: 'notifications', groupId: MENU_GROUP.OPERATIONS, label: 'Notifications', implemented: false, phase: 'Beta 1' },
   // Device & Fleet
   { id: 'fleet', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Treadmills / Devices', implemented: true },
@@ -45,6 +47,7 @@ export const MENU_LEAF_CATALOG = [
   // Business & Commerce
   { id: 'billing', groupId: MENU_GROUP.BUSINESS, label: 'Payments & Billing', implemented: true },
   { id: 'accounts', groupId: MENU_GROUP.BUSINESS, label: 'Customers / Operators / Venues', implemented: true },
+  { id: 'organizations', groupId: MENU_GROUP.BUSINESS, label: 'Organizations', implemented: false, phase: 'Beta 2' },
   { id: 'subscriptions', groupId: MENU_GROUP.BUSINESS, label: 'Subscriptions', implemented: false, phase: 'Beta 1' },
   { id: 'pricing', groupId: MENU_GROUP.BUSINESS, label: 'Pricing Rules', implemented: false, phase: 'Beta 1' },
   // Analytics & Reporting

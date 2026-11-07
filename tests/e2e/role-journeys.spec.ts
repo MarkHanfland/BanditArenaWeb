@@ -101,7 +101,7 @@ test.describe('customer billing roles land on their own invoices', () => {
 // FR-SW-UI-018 role journeys: given this role, when it signs in, it lands on this page, sees these
 // controls, and does not see those.
 const JOURNEYS = [
-  { role: 'frontDesk', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-users'], hidden: ['menu-venue-hours', 'menu-staff', 'menu-billing', 'menu-fleet', 'menu-dashboard'] },
+  { role: 'frontDesk', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-users', 'menu-incidents'], hidden: ['menu-venue-hours', 'menu-staff', 'menu-billing', 'menu-fleet', 'menu-dashboard'] },
   { role: 'accountOwner', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-venue-hours', 'menu-staff', 'menu-billing'], hidden: ['menu-fleet', 'menu-dashboard', 'menu-treadmill'] },
   { role: 'billingAdmin', lands: 'menu-billing', heading: 'Payments & Billing', sees: ['menu-billing'], hidden: ['menu-reservations', 'menu-fleet', 'menu-dashboard', 'menu-staff'] },
   { role: 'fleetAdmin', lands: 'menu-fleet', heading: 'Fleet', sees: ['menu-fleet', 'menu-dashboard'], hidden: ['menu-reservations', 'menu-staff'] },

@@ -11,7 +11,7 @@ const PAGE_SETS: Array<{ role: E2eAdminRole; cloudConsole: boolean; pages: strin
   {
     role: 'cloudAdmin',
     cloudConsole: true,
-    pages: ['reservations', 'venue-hours', 'users', 'staff', 'sessions', 'media', 'billing', 'accounts', 'usage', 'service-logs'],
+    pages: ['reservations', 'venue-hours', 'users', 'staff', 'sessions', 'incidents', 'media', 'billing', 'accounts', 'usage', 'service-logs'],
   },
   { role: 'fleetAdmin', cloudConsole: true, pages: ['fleet'] },
 ];

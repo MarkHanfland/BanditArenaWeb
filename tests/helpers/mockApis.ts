@@ -215,6 +215,7 @@ export function createCloudFixture() {
     offerings,
     alerts,
     notifications,
+    incidents: [] as Array<Record<string, unknown>>,
     sessions,
     opsLogs: [] as Array<Record<string, unknown>>,
     opsIncidents: [] as Array<Record<string, unknown>>,
@@ -693,6 +694,33 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
     }
     if (path === '/notifications' && method === 'GET') {
       return json({ message: 'Notifications', notifications: fixture.notifications });
+    }
+    if (path === '/incidents' && method === 'GET') {
+      return json({ message: 'Incidents', incidents: fixture.incidents });
+    }
+    if (path === '/incidents' && method === 'POST') {
+      const body = route.request().postDataJSON() || {}
+      const incident = {
+        incidentId: `inc-mock-${fixture.incidents.length + 1}`,
+        venueId: 'venue-demo-001',
+        sessionId: body.sessionId || null,
+        instanceId: body.instanceId || null,
+        injured: Boolean(body.injured),
+        description: body.description || '',
+        legalHold: true,
+        filedAt: new Date().toISOString(),
+      }
+      fixture.incidents.unshift(incident)
+      return json({ message: 'Incident filed', incident }, 201)
+    }
+    {
+      const release = path.match(/^\/incidents\/([^/]+)\/hold\/release$/)
+      if (release && method === 'POST') {
+        const incident = fixture.incidents.find((row) => row.incidentId === release[1])
+        if (!incident) return json({ error: 'Incident not found' }, 404)
+        incident.legalHold = false
+        return json({ message: 'Hold released', incident })
+      }
     }
     if (path === '/media' && method === 'GET') {
       return json({ media: fixture.media });
