@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Box, CircularProgress, Alert, Typography, Button } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { getConfig, getTelemetryCurrent } from '../../api/device'
+import SessionBindCode from './SessionBindCode'
 import { usePlayerSession } from '../../session/PlayerSessionContext'
 import {
   POSITION_HISTORY_MAX_DURATION_MS,
@@ -1169,9 +1170,11 @@ function DashboardTab() {
         height: '100%',
         minHeight: '400px',
         p: 0,
-        m: 0
+        m: 0,
+        position: 'relative',
       }}
     >
+      <SessionBindCode />
       {/* Two Column Viewers */}
       <Box sx={{ display: 'flex', flexGrow: 1, minHeight: 0 }}>
         {/* Left Column - Treadmill Viewer */}

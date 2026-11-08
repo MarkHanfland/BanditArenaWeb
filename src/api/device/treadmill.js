@@ -148,6 +148,20 @@ export async function startSession({
   }
 }
 
+export async function issueSessionCode() {
+  try {
+    const response = await deviceApi.post('/session-code')
+    return { data: response.data, error: null }
+  } catch (error) {
+    return {
+      data: null,
+      error: error.response?.data?.error || error.message,
+      code: error.response?.data?.code || null,
+      status: error.response?.status || 0,
+    }
+  }
+}
+
 export async function endSession() {
   try {
     const response = await deviceApi.post('/session/end')

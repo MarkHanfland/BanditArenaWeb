@@ -21,5 +21,6 @@ export {
   startSession,
   resumeSession,
   endSession,
+  issueSessionCode,
 } from './treadmill'
 export { applyCameraSimulatorMediaMode } from './cameraSimulator'

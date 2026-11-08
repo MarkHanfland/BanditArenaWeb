@@ -113,7 +113,16 @@ export function createCloudFixture() {
   const maintenance: Record<string, Array<Record<string, unknown>>> = {
     i1: [],
   };
-  const tickets: Array<Record<string, unknown>> = [];
+  const tickets: Array<Record<string, unknown>> = [
+    {
+      ticketId: 'ticket-demo-001',
+      subject: 'Belt drift on Bay 1',
+      status: 'open',
+      instanceId: 'i1',
+      createdAt: new Date().toISOString(),
+      priority: 'normal',
+    },
+  ];
   const diagCommands: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
   const quotes: Array<Record<string, unknown>> = [];
@@ -1001,15 +1010,22 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
       return json({ notificationId: item.notificationId, status: item.status, message: 'Notification queued' }, 202);
     }
     if (path === '/support/tickets' && method === 'GET') {
-      return json({ tickets: fixture.tickets || [], message: 'Support tickets' });
+      const status = url.searchParams.get('status');
+      let tickets = fixture.tickets || [];
+      if (status) tickets = tickets.filter((item) => item.status === status);
+      return json({ tickets, message: 'Support tickets' });
     }
     if (path === '/support/tickets' && method === 'POST') {
       const body = route.request().postDataJSON() || {};
       const ticket = {
         ticketId: `ticket-${Date.now()}`,
         subject: body.subject,
+        description: body.description || '',
         status: 'open',
         deviceId: body.deviceId || null,
+        instanceId: body.deviceId || body.instanceId || null,
+        createdAt: new Date().toISOString(),
+        priority: body.priority || 'normal',
       };
       fixture.tickets = [...(fixture.tickets || []), ticket];
       return json({ ticket, message: 'Support ticket created' }, 201);
@@ -1466,6 +1482,22 @@ export async function mockDeviceApi(page, options: {
   await page.route('**/events/safety', async (route) => deviceJson(route, { events: [] }));
   await page.route('**/safety/stop', async (route) => deviceJson(route, { ok: true }));
   await page.route('**/safety/start', async (route) => deviceJson(route, { ok: true }));
+  await page.route('**/session-code', async (route) => {
+    const pathname = new URL(route.request().url()).pathname.replace(/\/$/, '');
+    if (pathname !== '/session-code' && !pathname.endsWith('/session-code')) {
+      return route.fallback();
+    }
+    if (pathname.includes('/players/') || pathname.includes('/devices/')) {
+      return route.fallback();
+    }
+    if (route.request().method() !== 'POST') return route.fallback();
+    return deviceJson(route, {
+      code: '123456',
+      expiresAt: new Date(Date.now() + 120_000).toISOString(),
+      expiresInSeconds: 120,
+      deviceId: 'instance-demo-001',
+    }, 201);
+  });
 }
 
 export async function mockConsoleApis(

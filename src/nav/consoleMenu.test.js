@@ -71,6 +71,7 @@ test('FUTURE_MENU_LEAVES and implemented flags match catalog', () => {
   assert.equal(isMenuItemImplemented('fleet'), true)
   assert.equal(isMenuItemImplemented('sessions'), true)
   assert.equal(isMenuItemImplemented('service-logs'), true)
+  assert.equal(isMenuItemImplemented('support'), true)
   assert.equal(isMenuItemImplemented('notifications'), false)
   assert.ok(FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS].some((l) => l.id === 'notifications'))
   assert.ok(!FUTURE_MENU_LEAVES[MENU_GROUP.OPERATIONS]?.some((l) => l.id === 'sessions'))

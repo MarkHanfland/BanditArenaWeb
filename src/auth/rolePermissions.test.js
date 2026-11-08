@@ -88,14 +88,11 @@ test('each role lands on the page its job needs', () => {
     'bandit-account-owner': 'reservations',
     'bandit-billing-admin': 'billing',
     'bandit-fleet-admin': 'fleet',
+    'bandit-technician': 'support',
   }
   for (const [group, page] of Object.entries(landing)) {
     assert.equal(landingMenuId(as(group)), page, group + ' lands on ' + page)
   }
-})
-
-test('a Technician lands on the first page that exists while Support is not built', () => {
-  assert.equal(landingMenuId(as('bandit-technician')), 'dashboard')
 })
 
 test('the primary role decides the landing for a user with several roles', () => {

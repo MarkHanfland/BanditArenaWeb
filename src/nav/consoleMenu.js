@@ -38,7 +38,7 @@ export const MENU_LEAF_CATALOG = [
   { id: 'fleet', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Treadmills / Devices', implemented: true },
   { id: 'firmware', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Firmware & Updates', implemented: false, phase: 'Beta 1' },
   { id: 'diagnostics', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Diagnostics & Health', implemented: false, phase: 'Beta 1' },
-  { id: 'support', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Support & Maintenance', implemented: false, phase: 'Beta 1' },
+  { id: 'support', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Support & Maintenance', implemented: true },
   { id: 'network', groupId: MENU_GROUP.DEVICE_FLEET, label: 'Network & Connectivity', implemented: false, phase: 'Beta 2' },
   // Content & Media
   { id: 'media', groupId: MENU_GROUP.CONTENT, label: 'Experience Library', implemented: true },

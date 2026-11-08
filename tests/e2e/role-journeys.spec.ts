@@ -107,7 +107,44 @@ const JOURNEYS = [
   { role: 'fleetAdmin', lands: 'menu-fleet', heading: 'Fleet', sees: ['menu-fleet', 'menu-dashboard'], hidden: ['menu-reservations', 'menu-staff'] },
   { role: 'venueAdmin', lands: 'menu-dashboard', heading: null, sees: ['menu-dashboard', 'menu-reservations', 'menu-venue-hours'], hidden: ['menu-billing', 'menu-fleet'] },
   { role: 'operator', lands: 'menu-dashboard', heading: null, sees: ['menu-dashboard', 'menu-treadmill'], hidden: ['menu-reservations', 'menu-billing', 'menu-fleet'] },
+  { role: 'technician', lands: 'menu-support', heading: 'Support', sees: ['menu-support', 'menu-dashboard', 'menu-diagnostics'], hidden: ['menu-reservations', 'menu-billing', 'menu-fleet'] },
 ] as const;
+
+test.describe('FR-SW-UI-015 Front Desk camera scan and Operator bind code', () => {
+  test('Front Desk can open the camera scan for a Player pass', async ({ page }) => {
+    await mockConsoleApis(page);
+    await signInAs(page, 'frontDesk');
+    await expect(page.getByTestId('check-in-scan')).toBeVisible();
+    await page.getByTestId('check-in-scan').click();
+    await expect(page.getByTestId('pass-scan-dialog')).toBeVisible();
+    await expect(page.getByTestId('pass-scan-photo')).toBeVisible();
+    await page.getByTestId('pass-scan-cancel').click();
+    await expect(page.getByTestId('pass-scan-dialog')).toHaveCount(0);
+  });
+
+  test('Operator Dashboard shows a 6-digit Player bind code', async ({ page }) => {
+    await mockConsoleApis(page);
+    await signInAs(page, 'operator');
+    await expect(page.getByTestId('session-bind-code')).toBeVisible();
+    await expect(page.getByTestId('session-bind-digits')).toHaveText('123 456');
+    await expect(page.getByTestId('session-bind-ttl')).toContainText('s left');
+  });
+});
+
+test.describe('FR-SW-UI-018 Field Service Technician Support tickets', () => {
+  test('a Technician can open a ticket on Support', async ({ page }) => {
+    await mockConsoleApis(page);
+    await signInAs(page, 'technician');
+    await expect(page.getByRole('heading', { name: 'Support', exact: true })).toBeVisible();
+    await expect(page.getByTestId('support-table')).toContainText('Belt drift on Bay 1');
+    await page.getByTestId('support-subject').fill('Encoder noise');
+    await page.getByTestId('support-device').fill('i1');
+    await page.getByTestId('support-description').fill('Clicking from the left encoder.');
+    await page.getByTestId('support-create').click();
+    await expect(page.getByTestId('support-action')).toContainText('opened');
+    await expect(page.getByTestId('support-table')).toContainText('Encoder noise');
+  });
+});
 
 test.describe('FR-SW-UI-018 each role lands on its own page', () => {
   for (const journey of JOURNEYS) {

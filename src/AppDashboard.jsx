@@ -76,6 +76,7 @@ import VenueHoursPage from './pages/cloud/VenueHoursPage'
 import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
 import IncidentsPage from './pages/cloud/IncidentsPage'
+import SupportPage from './pages/cloud/SupportPage'
 
 import { useAuth } from './auth/useAuth'
 import { canOperateDevice, extractGroupsFromUser, filterMenuGroups, landingMenuId } from './auth/rolePermissions'
@@ -129,6 +130,7 @@ const IMPLEMENTED_PANELS = {
   sessions: () => <SessionHistoryPage />,
   incidents: () => <IncidentsPage />,
   'service-logs': () => <ServiceLogsPage />,
+  support: () => <SupportPage />,
 }
 
 const MENU_ICONS = {

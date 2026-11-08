@@ -28,6 +28,7 @@ import {
 } from '../../api/cloud'
 import { useVenue } from '../../session/VenueContext'
 import { nextOpenSlot, playerStatus } from './frontDesk'
+import PassScanDialog from './PassScanDialog'
 
 function overlaps(start, end, slotStart, slotEnd) {
   return Date.parse(start) < Date.parse(slotEnd) && Date.parse(end) > Date.parse(slotStart)
@@ -116,6 +117,7 @@ export default function ReservationsPage() {
   const [scan, setScan] = useState(null)
   const [walkInOpen, setWalkInOpen] = useState(false)
   const [walkInPlayer, setWalkInPlayer] = useState('')
+  const [scanOpen, setScanOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!venueCtx?.ready) return
@@ -272,11 +274,12 @@ export default function ReservationsPage() {
     await load()
   }
 
-  const checkInByPass = async () => {
-    const payload = passText.trim()
+  const checkInByPass = async (raw) => {
+    const payload = String(raw ?? passText).trim()
     if (!payload) return
     setBusy(true)
     setScan(null)
+    setScanOpen(false)
     const result = await redeemSessionPass(payload)
     setBusy(false)
     if (result.error) {
@@ -377,14 +380,24 @@ export default function ReservationsPage() {
           value={passText}
           onChange={(event) => setPassText(event.target.value)}
           onKeyDown={(event) => { if (event.key === 'Enter') checkInByPass() }}
-          helperText="Scan the Player's pass, or type its code"
+          helperText="Scan the Player's pass, photograph it, or type its code"
           sx={{ minWidth: 320 }}
           inputProps={{ 'data-testid': 'check-in-code', autoComplete: 'off' }}
         />
-        <Button variant="contained" data-testid="check-in-submit" disabled={busy || !passText.trim()} onClick={checkInByPass} sx={{ mt: 0.5 }}>
+        <Button
+          variant="outlined"
+          data-testid="check-in-scan"
+          disabled={busy}
+          onClick={() => setScanOpen(true)}
+          sx={{ mt: 0.5 }}
+        >
+          Scan pass
+        </Button>
+        <Button variant="contained" data-testid="check-in-submit" disabled={busy || !passText.trim()} onClick={() => checkInByPass()} sx={{ mt: 0.5 }}>
           Check in
         </Button>
       </Stack>
+      <PassScanDialog open={scanOpen} onClose={() => setScanOpen(false)} onDetected={checkInByPass} />
       {scan?.error && <Alert severity="error" sx={{ mb: 2 }} data-testid="check-in-result">{scan.error}</Alert>}
       {scan && !scan.error && (
         <Alert severity={scan.eligible ? 'success' : 'warning'} sx={{ mb: 2 }} data-testid="check-in-result">

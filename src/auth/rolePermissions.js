@@ -129,7 +129,7 @@ export function deriveUserRole(user) {
 /**
  * FR-SW-UI-018 landing: the first page of the user's primary role. A role not listed lands on
  * its first permitted page. Account Owner lands on Reservations until the onboarding checklist
- * (FR-SW-UI-016) exists. Field Service Technician lands on Support once that page is built.
+ * (FR-SW-UI-016) exists. Field Service Technician lands on Support.
  */
 const ROLE_LANDING = {
   [ROLE_OPERATOR]: 'dashboard',

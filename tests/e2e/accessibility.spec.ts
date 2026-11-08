@@ -14,6 +14,7 @@ const PAGE_SETS: Array<{ role: E2eAdminRole; cloudConsole: boolean; pages: strin
     pages: ['reservations', 'venue-hours', 'users', 'staff', 'sessions', 'incidents', 'media', 'billing', 'accounts', 'usage', 'service-logs'],
   },
   { role: 'fleetAdmin', cloudConsole: true, pages: ['fleet'] },
+  { role: 'technician', cloudConsole: true, pages: ['support'] },
 ];
 
 const LANDINGS: Array<{ role: E2eAdminRole; label: string }> = [
@@ -23,6 +24,7 @@ const LANDINGS: Array<{ role: E2eAdminRole; label: string }> = [
   { role: 'accountOwner', label: 'Account Owner' },
   { role: 'billingAdmin', label: 'Billing Admin' },
   { role: 'fleetAdmin', label: 'Fleet Administrator' },
+  { role: 'technician', label: 'Technician' },
 ];
 
 async function violations(page) {

@@ -33,8 +33,8 @@ const roleCases: RoleCase[] = [
   },
   {
     roleId: 'technician',
-    expected: ['menu-dashboard', 'menu-services', 'menu-config', 'menu-group-device-fleet'],
-    expectedDisabled: ['menu-diagnostics', 'menu-support'],
+    expected: ['menu-dashboard', 'menu-services', 'menu-config', 'menu-group-device-fleet', 'menu-support'],
+    expectedDisabled: ['menu-diagnostics'],
     notExpected: [
       'menu-fleet',
       'menu-firmware',
@@ -93,6 +93,7 @@ const roleCases: RoleCase[] = [
       'menu-group-device-fleet',
       'menu-group-analytics',
       'menu-group-administration',
+      'menu-support',
     ],
     expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles'],
     // Fleet Administrator owns Venue hours (rolePermissions FLEET_ADMIN_CLOUD), so the
