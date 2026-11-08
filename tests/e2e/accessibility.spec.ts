@@ -15,6 +15,7 @@ const PAGE_SETS: Array<{ role: E2eAdminRole; cloudConsole: boolean; pages: strin
   },
   { role: 'fleetAdmin', cloudConsole: true, pages: ['fleet'] },
   { role: 'technician', cloudConsole: true, pages: ['support'] },
+  { role: 'accountOwner', cloudConsole: true, pages: ['onboarding'] },
 ];
 
 const LANDINGS: Array<{ role: E2eAdminRole; label: string }> = [

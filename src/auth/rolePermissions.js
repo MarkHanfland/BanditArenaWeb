@@ -27,7 +27,7 @@ const DEVICE_MENU_IDS = leafIdsInGroups(MENU_GROUP.LOCAL)
  * the user a 403. Business pages follow Cloud Administrator ⊇ Venue Administrator;
  * fleet pages follow Fleet Administrator ⊇ Field Service Technician.
  */
-const VENUE_CLOUD = leafIdsInGroups(MENU_GROUP.OPERATIONS, MENU_GROUP.CONTENT)
+const VENUE_CLOUD = leafIdsInGroups(MENU_GROUP.OPERATIONS, MENU_GROUP.CONTENT).filter((id) => id !== 'onboarding')
 /** Usage shows Cloud Administrator only its notification panel (Domain 14). */
 const CLOUD_ADMIN_CLOUD = [
   ...VENUE_CLOUD,
@@ -50,7 +50,7 @@ const DEVELOPER_CLOUD = ['reservations', 'users', 'staff', 'sessions', 'usage']
  * billing and staff delegation, no fleet or catalog writes. Billing Admin: billing only.
  * Front Desk: reservations, check-in, and Player lookup and enrollment.
  */
-const ACCOUNT_OWNER_CLOUD = [...VENUE_CLOUD, 'billing', 'usage', 'audit']
+const ACCOUNT_OWNER_CLOUD = [...VENUE_CLOUD, 'onboarding', 'billing', 'usage', 'audit']
 const BILLING_ADMIN_CLOUD = ['billing']
 const FRONT_DESK_CLOUD = ['reservations', 'users', 'incidents']
 const ORG_ADMIN_CLOUD = ['organizations']
@@ -128,24 +128,28 @@ export function deriveUserRole(user) {
 
 /**
  * FR-SW-UI-018 landing: the first page of the user's primary role. A role not listed lands on
- * its first permitted page. Account Owner lands on Reservations until the onboarding checklist
- * (FR-SW-UI-016) exists. Field Service Technician lands on Support.
+ * its first permitted page. Account Owner lands on Onboarding until the checklist is complete,
+ * then Reservations. Field Service Technician lands on Support.
  */
 const ROLE_LANDING = {
   [ROLE_OPERATOR]: 'dashboard',
   [ROLE_VENUE_ADMIN]: 'dashboard',
   [ROLE_CLOUD_ADMIN]: 'dashboard',
   [ROLE_FRONT_DESK]: 'reservations',
-  [ROLE_ACCOUNT_OWNER]: 'reservations',
+  [ROLE_ACCOUNT_OWNER]: 'onboarding',
   [ROLE_BILLING_ADMIN]: 'billing',
   [ROLE_FLEET_ADMIN]: 'fleet',
   [ROLE_TECHNICIAN]: 'support',
 }
 
-export function landingMenuId(user) {
+export function landingMenuId(user, options = {}) {
   const allowed = getAllowedMenuIds(user)
   const leaves = new Map(MENU_LEAF_CATALOG.map((leaf) => [leaf.id, leaf]))
   const usable = (id) => allowed.includes(id) && leaves.get(id)?.implemented !== false
+  if (deriveUserRole(user) === ROLE_ACCOUNT_OWNER && usable('onboarding')) {
+    if (options.onboardingComplete === true && usable('reservations')) return 'reservations'
+    return 'onboarding'
+  }
   const wanted = ROLE_LANDING[deriveUserRole(user)]
   if (wanted && usable(wanted)) return wanted
   return MENU_LEAF_CATALOG.find((leaf) => usable(leaf.id))?.id || null

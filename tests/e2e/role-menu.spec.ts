@@ -75,6 +75,7 @@ const roleCases: RoleCase[] = [
       'menu-billing',
       'menu-accounts',
       'menu-service-logs',
+      'menu-onboarding',
       'menu-group-device-fleet',
       'menu-group-business',
       'menu-group-analytics',
@@ -98,7 +99,7 @@ const roleCases: RoleCase[] = [
     expectedDisabled: ['menu-firmware', 'menu-diagnostics', 'menu-roles'],
     // Fleet Administrator owns Venue hours (rolePermissions FLEET_ADMIN_CLOUD), so the
     // Operations group is present with that single page; every other operations page is not.
-    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-reservations', 'menu-audit'],
+    notExpected: ['menu-users', 'menu-sessions', 'menu-media', 'menu-staff', 'menu-accounts', 'menu-reservations', 'menu-audit', 'menu-onboarding'],
   },
   {
     roleId: 'cloudAdmin',
@@ -118,13 +119,13 @@ const roleCases: RoleCase[] = [
       'menu-group-administration',
     ],
     expectedDisabled: ['menu-subscriptions', 'menu-roles', 'menu-audit'],
-    notExpected: ['menu-fleet', 'menu-group-device-fleet'],
+    notExpected: ['menu-fleet', 'menu-group-device-fleet', 'menu-onboarding'],
   },
   // FR-SW-UI-014 / FR-SW-AUTH-012 tenant staff roles (cloud-only: no Local Device menus).
   {
     roleId: 'accountOwner',
     expected: [
-      'menu-users', 'menu-reservations', 'menu-staff', 'menu-sessions', 'menu-incidents', 'menu-media',
+      'menu-onboarding', 'menu-users', 'menu-reservations', 'menu-staff', 'menu-sessions', 'menu-incidents', 'menu-media',
       'menu-billing', 'menu-usage', 'menu-group-operations', 'menu-group-business',
     ],
     expectedDisabled: ['menu-audit', 'menu-cohorts', 'menu-notifications'],
@@ -140,7 +141,7 @@ const roleCases: RoleCase[] = [
     roleId: 'frontDesk',
     expected: ['menu-reservations', 'menu-users', 'menu-incidents', 'menu-group-operations'],
     expectedDisabled: [],
-    notExpected: ['menu-dashboard', 'menu-staff', 'menu-sessions', 'menu-billing', 'menu-media', 'menu-fleet', 'menu-group-business', 'menu-group-device-fleet'],
+    notExpected: ['menu-dashboard', 'menu-staff', 'menu-sessions', 'menu-billing', 'menu-media', 'menu-fleet', 'menu-onboarding', 'menu-group-business', 'menu-group-device-fleet'],
   },
   {
     roleId: 'orgAdmin',

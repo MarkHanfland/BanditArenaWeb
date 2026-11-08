@@ -119,4 +119,5 @@ export {
   listIncidents,
   createIncident,
   releaseIncidentHold,
+  getOnboardingChecklist,
 } from './client'

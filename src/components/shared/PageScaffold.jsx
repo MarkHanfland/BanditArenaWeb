@@ -45,7 +45,7 @@ function VenueBanner() {
 export default function PageScaffold({ title, category, description, children, tone = 'default' }) {
   const immersive = tone === 'immersive'
   return (
-    <Box sx={{ p: 3, height: '100%', overflowY: 'auto' }}>
+    <Box sx={{ p: 3, height: '100%', overflowY: 'auto' }} tabIndex={0}>
       <VenueBanner />
       <Paper
         elevation={immersive ? 0 : 1}

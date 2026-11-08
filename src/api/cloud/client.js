@@ -1107,6 +1107,10 @@ export async function queueDiagnosticCommand(payload) {
 
 
 
+export async function getOnboardingChecklist() {
+  return request(() => cloudApi.get('/onboarding/checklist'))
+}
+
 export async function listIncidents(params = {}) {
   const qs = new URLSearchParams()
   if (params.venueId) qs.set('venueId', params.venueId)

@@ -229,6 +229,7 @@ export function createCloudFixture() {
     opsLogs: [] as Array<Record<string, unknown>>,
     opsIncidents: [] as Array<Record<string, unknown>>,
     denyFleetAnalytics: true,
+    onboardingComplete: false,
   };
 }
 
@@ -253,6 +254,38 @@ export async function mockCloudApi(page, fixture: CloudFixture = createCloudFixt
 
     if (path === '/operators/me') {
       return json({ operator: fixture.operator, message: 'Current Operator context' });
+    }
+    if (path === '/onboarding/checklist' && method === 'GET') {
+      const waiting = {
+        id: 'agreement_signed',
+        label: 'Agreement signed',
+        owner: 'customer',
+        status: 'waiting',
+        completedAt: null,
+        overdue: false,
+      };
+      const steps = fixture.onboardingComplete
+        ? [
+            { ...waiting, status: 'complete', completedAt: new Date().toISOString() },
+            { id: 'first_session', label: 'First session completed', owner: 'customer', status: 'complete', completedAt: new Date().toISOString(), overdue: false },
+          ]
+        : [
+            waiting,
+            { id: 'deposit_paid', label: 'Deposit paid', owner: 'customer', status: 'waiting', completedAt: null, overdue: false },
+            { id: 'device_commissioned', label: 'Device commissioned', owner: 'bandit', status: 'waiting', expectedDate: new Date(Date.now() + 14 * 86400000).toISOString(), overdue: false },
+            { id: 'staff_invited', label: 'Staff invited', owner: 'customer', status: 'waiting', overdue: false },
+            { id: 'first_session', label: 'First session completed', owner: 'customer', status: 'waiting', overdue: false },
+          ];
+      return json({
+        complete: Boolean(fixture.onboardingComplete),
+        checklists: [{
+          agreementId: fixture.onboardingComplete ? 'agr-demo-001' : null,
+          siteKind: 'commercial',
+          complete: Boolean(fixture.onboardingComplete),
+          steps,
+        }],
+        message: 'Onboarding checklist',
+      });
     }
     if (path === '/operators' && method === 'GET') {
       return json({

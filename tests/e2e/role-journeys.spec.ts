@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signInAs } from '../helpers/auth';
-import { mockConsoleApis } from '../helpers/mockApis';
+import { mockConsoleApis, createCloudFixture } from '../helpers/mockApis';
 import { expandAllMenuGroups, expandMenuGroup } from '../helpers/menuNav';
 
 // Role-journey acceptance (PM review, FR-SW-UI-014 / FR-SW-UI-017 / FR-SW-UI-018).
@@ -102,7 +102,7 @@ test.describe('customer billing roles land on their own invoices', () => {
 // controls, and does not see those.
 const JOURNEYS = [
   { role: 'frontDesk', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-users', 'menu-incidents'], hidden: ['menu-venue-hours', 'menu-staff', 'menu-billing', 'menu-fleet', 'menu-dashboard'] },
-  { role: 'accountOwner', lands: 'menu-reservations', heading: 'Reservations', sees: ['menu-reservations', 'menu-venue-hours', 'menu-staff', 'menu-billing'], hidden: ['menu-fleet', 'menu-dashboard', 'menu-treadmill'] },
+  { role: 'accountOwner', lands: 'menu-onboarding', heading: 'Onboarding', sees: ['menu-onboarding', 'menu-reservations', 'menu-venue-hours', 'menu-staff', 'menu-billing'], hidden: ['menu-fleet', 'menu-dashboard', 'menu-treadmill'] },
   { role: 'billingAdmin', lands: 'menu-billing', heading: 'Payments & Billing', sees: ['menu-billing'], hidden: ['menu-reservations', 'menu-fleet', 'menu-dashboard', 'menu-staff'] },
   { role: 'fleetAdmin', lands: 'menu-fleet', heading: 'Fleet', sees: ['menu-fleet', 'menu-dashboard'], hidden: ['menu-reservations', 'menu-staff'] },
   { role: 'venueAdmin', lands: 'menu-dashboard', heading: null, sees: ['menu-dashboard', 'menu-reservations', 'menu-venue-hours'], hidden: ['menu-billing', 'menu-fleet'] },
@@ -159,4 +159,29 @@ test.describe('FR-SW-UI-018 each role lands on its own page', () => {
       for (const id of journey.hidden) await expect(page.getByTestId(id)).toHaveCount(0);
     });
   }
+});
+
+test.describe('FR-SW-UI-016 Account Owner onboarding checklist', () => {
+  test('an unfinished checklist shows waiting steps and does not offer Reservations yet', async ({ page }) => {
+    await mockConsoleApis(page);
+    await signInAs(page, 'accountOwner');
+    await expect(page.getByTestId('onboarding-page')).toBeVisible();
+    await expect(page.getByTestId('onboarding-waiting')).toBeVisible();
+    await expect(page.getByTestId('onboarding-step-agreement_signed')).toContainText('Waiting');
+    await expect(page.getByTestId('onboarding-continue')).toHaveCount(0);
+  });
+
+  test('a finished checklist lands the Account Owner on Reservations', async ({ page }) => {
+    const fixture = createCloudFixture();
+    fixture.onboardingComplete = true;
+    await mockConsoleApis(page, fixture);
+    await signInAs(page, 'accountOwner');
+    await expect(page.getByTestId('menu-reservations')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { name: 'Reservations', exact: true })).toBeVisible();
+    await expandAllMenuGroups(page);
+    await page.getByTestId('menu-onboarding').click();
+    await expect(page.getByTestId('onboarding-complete')).toBeVisible();
+    await page.getByTestId('onboarding-continue').click();
+    await expect(page.getByTestId('menu-reservations')).toHaveAttribute('aria-current', 'page');
+  });
 });

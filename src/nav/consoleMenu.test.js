@@ -16,8 +16,10 @@ test('pillars include Alpha and roadmap leaves', () => {
   const ops = MENU_PILLARS.find((p) => p.id === MENU_GROUP.OPERATIONS)
   const fleet = MENU_PILLARS.find((p) => p.id === MENU_GROUP.DEVICE_FLEET)
   const admin = MENU_PILLARS.find((p) => p.id === MENU_GROUP.ADMINISTRATION)
+  assert.ok(ops.itemIds.includes('onboarding'))
   assert.ok(ops.itemIds.includes('reservations'))
   assert.ok(ops.itemIds.includes('sessions'))
+  assert.equal(MENU_LEAF_CATALOG.find((l) => l.id === 'onboarding')?.implemented, true)
   assert.equal(
     MENU_LEAF_CATALOG.find((l) => l.id === 'sessions')?.implemented,
     true,

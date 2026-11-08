@@ -54,6 +54,7 @@ import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
 import ApiIcon from '@mui/icons-material/Api'
 import PaletteIcon from '@mui/icons-material/Palette'
 import FactCheckIcon from '@mui/icons-material/FactCheck'
+import PlaylistAddCheckIcon from '@mui/icons-material/PlaylistAddCheck'
 import AssignmentLateIcon from '@mui/icons-material/AssignmentLate'
 import SchoolIcon from '@mui/icons-material/School'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
@@ -77,9 +78,10 @@ import SessionHistoryPage from './pages/cloud/SessionHistoryPage'
 import ServiceLogsPage from './pages/cloud/ServiceLogsPage'
 import IncidentsPage from './pages/cloud/IncidentsPage'
 import SupportPage from './pages/cloud/SupportPage'
+import OnboardingPage from './pages/cloud/OnboardingPage'
 
 import { useAuth } from './auth/useAuth'
-import { canOperateDevice, extractGroupsFromUser, filterMenuGroups, landingMenuId } from './auth/rolePermissions'
+import { canOperateDevice, extractGroupsFromUser, filterMenuGroups, landingMenuId, ROLE_ACCOUNT_OWNER, deriveUserRole } from './auth/rolePermissions'
 import { DeviceOfflinePanel } from './components/shared/DeviceOfflineBanner'
 import { useDeviceOnline } from './hooks/useDeviceOnline'
 import DeviceStatusBand from './components/shared/DeviceStatusBand'
@@ -100,7 +102,7 @@ import {
   triggerSafetyStart,
   getAuthInfo,
 } from './api/device'
-import { setCloudAuthToken, clearCloudAuthToken, setCloudOperatorId, setCloudRefreshCallback, setCloudLoginCallback } from './api/cloud'
+import { setCloudAuthToken, clearCloudAuthToken, setCloudOperatorId, setCloudRefreshCallback, setCloudLoginCallback, getOnboardingChecklist } from './api/cloud'
 import {
   MENU_GROUP,
   MENU_LEAF_CATALOG,
@@ -131,6 +133,7 @@ const IMPLEMENTED_PANELS = {
   incidents: () => <IncidentsPage />,
   'service-logs': () => <ServiceLogsPage />,
   support: () => <SupportPage />,
+  onboarding: () => <OnboardingPage onContinue={() => window.dispatchEvent(new CustomEvent('bandit:open-reservations'))} />,
 }
 
 const MENU_ICONS = {
@@ -139,6 +142,7 @@ const MENU_ICONS = {
   services: <DeviceHubIcon />,
   events: <ReportProblemIcon />,
   config: <TuneIcon />,
+  onboarding: <PlaylistAddCheckIcon />,
   reservations: <EventIcon />,
   'venue-hours': <CalendarMonthIcon />,
   users: <GroupIcon />,
@@ -292,17 +296,35 @@ function DashboardView({ deviceOnline, activeTab, setActiveTab }) {
     const onOpenHistory = () => {
       selectMenuItem('sessions')
     }
+    const onOpenReservations = () => {
+      selectMenuItem('reservations')
+    }
     window.addEventListener('bandit:open-session-history', onOpenHistory)
-    return () => window.removeEventListener('bandit:open-session-history', onOpenHistory)
+    window.addEventListener('bandit:open-reservations', onOpenReservations)
+    return () => {
+      window.removeEventListener('bandit:open-session-history', onOpenHistory)
+      window.removeEventListener('bandit:open-reservations', onOpenReservations)
+    }
   }, [selectMenuItem])
 
   // FR-SW-UI-018: sign-in lands on the first page of the user's primary role, once.
   const landed = useRef(false)
   useEffect(() => {
     if (landed.current || !user) return
-    landed.current = true
-    const id = landingMenuId(user)
-    if (id && id !== 'dashboard') selectMenuItem(id)
+    let cancelled = false
+    const land = async () => {
+      const extras = {}
+      if (deriveUserRole(user) === ROLE_ACCOUNT_OWNER) {
+        const result = await getOnboardingChecklist()
+        extras.onboardingComplete = result.data?.complete === true
+      }
+      if (cancelled) return
+      landed.current = true
+      const id = landingMenuId(user, extras)
+      if (id && id !== 'dashboard') selectMenuItem(id)
+    }
+    land()
+    return () => { cancelled = true }
   }, [user, selectMenuItem])
 
   // Sync default expand when local reachability flips (FR-SW-UI-009).

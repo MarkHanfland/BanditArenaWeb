@@ -19,7 +19,7 @@ test('Billing Admin sees billing only', () => {
 
 test('Account Owner sees venue pages, billing, incidents and audit, but no fleet pages', () => {
   const m = menus('bandit-account-owner')
-  for (const id of ['reservations', 'users', 'staff', 'sessions', 'media', 'billing', 'usage', 'incidents', 'audit']) {
+  for (const id of ['onboarding', 'reservations', 'users', 'staff', 'sessions', 'media', 'billing', 'usage', 'incidents', 'audit']) {
     assert.ok(m.has(id), `account owner sees ${id}`)
   }
   for (const id of ['fleet', 'diagnostics', 'support', 'accounts']) {
@@ -30,7 +30,7 @@ test('Account Owner sees venue pages, billing, incidents and audit, but no fleet
 test('Venue Administrator sees device and venue pages, no billing or fleet', () => {
   const m = menus('bandit-venue-admin')
   assert.ok(m.has('dashboard') && m.has('reservations') && m.has('staff') && m.has('venue-hours'))
-  assert.ok(!m.has('billing') && !m.has('fleet') && !m.has('accounts'))
+  assert.ok(!m.has('billing') && !m.has('fleet') && !m.has('accounts') && !m.has('onboarding'))
 })
 
 test('Technician and Fleet Administrator see fleet pages, no business pages', () => {
@@ -85,7 +85,7 @@ test('each role lands on the page its job needs', () => {
     'bandit-venue-admin': 'dashboard',
     'bandit-cloud-admin': 'dashboard',
     'bandit-front-desk': 'reservations',
-    'bandit-account-owner': 'reservations',
+    'bandit-account-owner': 'onboarding',
     'bandit-billing-admin': 'billing',
     'bandit-fleet-admin': 'fleet',
     'bandit-technician': 'support',
@@ -98,4 +98,8 @@ test('each role lands on the page its job needs', () => {
 test('the primary role decides the landing for a user with several roles', () => {
   assert.equal(landingMenuId(as('bandit-front-desk', 'bandit-technician')), 'reservations')
   assert.equal(landingMenuId(as('bandit-fleet-admin', 'bandit-front-desk')), 'fleet')
+})
+
+test('FR-SW-UI-016: a finished checklist sends the Account Owner to Reservations', () => {
+  assert.equal(landingMenuId(as('bandit-account-owner'), { onboardingComplete: true }), 'reservations')
 })
